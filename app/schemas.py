@@ -83,13 +83,17 @@ class EmailTrackerCreate(EmailTrackerBase):
 class EmailTrackerResponse(EmailTrackerBase):
     id: str
     campaign_id: str
-    sent_at: datetime
+    sent_at: Optional[datetime] = None
     opened_at: Optional[datetime] = None
-    open_count: int
-    click_count: int
-    delivery_status: str
+    open_count: int = 0
+    click_count: int = 0
+    delivered: bool = False
     created_at: datetime
     updated_at: datetime
+    name: Optional[str] = None
+    company: Optional[str] = None
+    position: Optional[str] = None
+    body: Optional[str] = None
     
     class Config:
         from_attributes = True

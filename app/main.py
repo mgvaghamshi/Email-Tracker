@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import Response, RedirectResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -140,33 +140,38 @@ async def get_campaigns(
     db: Session = Depends(get_db)
 ):
     """Get all email campaigns with tracking details"""
-    # Query trackers with campaign join
-    trackers = db.query(EmailTracker).join(
-        EmailCampaign,
-        EmailTracker.campaign_id == EmailCampaign.id,
-        isouter=True  # Left outer join
-    ).offset(skip).limit(limit).all()
+    try: 
+        # Query trackers with campaign join
+        trackers = db.query(EmailTracker).join(
+            EmailCampaign,
+            EmailTracker.campaign_id == EmailCampaign.id,
+            isouter=True  # Left outer join
+        ).offset(skip).limit(limit).all()
+        
+        # Format response
+        result = []
+        for tracker in trackers:
+            result.append({
+                "id": tracker.id,
+                "name": tracker.name,
+                "company": tracker.company,
+                "position": tracker.position,
+                "email": tracker.recipient_email,
+                "subject": tracker.subject,
+                "content": tracker.body,
+                "sent": tracker.delivered,
+                "created_at": tracker.sent_at or tracker.created_at,
+                "updated_at": tracker.updated_at or tracker.created_at,
+                "campaign_id": tracker.campaign_id,
+                "campaign_name": tracker.campaign.name if tracker.campaign else None,
+                "campaign_description": tracker.campaign.description if tracker.campaign else None
+            })
+        
+        return result
     
-    # Format response
-    result = []
-    for tracker in trackers:
-        result.append({
-            "id": tracker.id,
-            "name": tracker.name,
-            "company": tracker.company,
-            "position": tracker.position,
-            "email": tracker.recipient_email,
-            "subject": tracker.subject,
-            "content": tracker.body,
-            "sent": tracker.delivered,
-            "created_at": tracker.sent_at or tracker.created_at,
-            "updated_at": tracker.updated_at or tracker.created_at,
-            "campaign_id": tracker.campaign_id,
-            "campaign_name": tracker.campaign.name if tracker.campaign else None,
-            "campaign_description": tracker.campaign.description if tracker.campaign else None
-        })
-    
-    return result
+    except Exception as e:
+        logger.error(f"Error fetching campaigns: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/campaigns/{campaign_id}", response_model=EmailCampaignResponse)
 async def get_campaign(
@@ -413,46 +418,55 @@ async def track_email_open(
 ):
     """Track email opens via tracking pixel"""
     try:
+        logger.info(f"Processing open tracking for tracker_id: {tracker_id}")
+        
         # Get tracker
         tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()
         if not tracker:
-            # Return 1x1 transparent pixel even if tracker not found
+            logger.error(f"Tracker not found: {tracker_id}")
+            # Return pixel even if tracker not found to avoid breaking email clients
             return Response(
-                content=base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"),
-                media_type="image/gif"
+                content=b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
+                media_type='image/gif'
             )
         
-        # Update tracker
-        if not tracker.opened_at:
-            tracker.opened_at = datetime.utcnow()
+        try:
+            # Update open stats
+            if tracker.open_count is None:
+                tracker.open_count = 0
             tracker.open_count += 1
-        else:
-            tracker.open_count += 1
+            if not tracker.opened_at:
+                tracker.opened_at = datetime.utcnow()
+            tracker.updated_at = datetime.utcnow()
+            
+            # Create event record
+            event = EmailEvent(
+                id=str(uuid.uuid4()),
+                tracker_id=tracker_id,
+                event_type="open",
+                timestamp=datetime.utcnow(),
+                user_agent=str(request.headers.get("user-agent")),
+                ip_address=str(request.client.host)
+            )
+            db.add(event)
+            
+            # Commit changes
+            db.commit()
+            logger.info(f"Successfully recorded open event for tracker: {tracker_id}")
+            
+        except Exception as db_error:
+            logger.error(f"Database error while recording open event: {str(db_error)}")
+            db.rollback()  # Rollback on error
         
-        # Create event
-        event = EmailEvent(
-            id=str(uuid.uuid4()),
-            tracker_id=tracker_id,
-            event_type="open",
-            timestamp=datetime.utcnow(),
-            user_agent=request.headers.get("user-agent", ""),
-            ip_address=request.client.host
-        )
-        db.add(event)
-        db.commit()
-        
-        # Return 1x1 transparent pixel
+        # Always return the pixel, even if tracking fails
         return Response(
-            content=base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"),
-            media_type="image/gif"
+            content=b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
+            media_type='image/gif'
         )
-    
+        
     except Exception as e:
-        # Always return pixel even on error
-        return Response(
-            content=base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"),
-            media_type="image/gif"
-        )
+        logger.error(f"Open tracking error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/track/click/{tracker_id}")
 async def track_email_click(
@@ -461,47 +475,45 @@ async def track_email_click(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    """Track email clicks and redirect to original URL"""
+    """Track email link clicks"""
     try:
         # Get tracker
         tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()
-        if tracker:
-            # Update tracker
-            tracker.click_count += 1
-            
-            # Create event
-            event = EmailEvent(
-                id=str(uuid.uuid4()),
-                tracker_id=tracker_id,
-                event_type="click",
-                timestamp=datetime.utcnow(),
-                user_agent=request.headers.get("user-agent", ""),
-                ip_address=request.client.host
-            )
-            db.add(event)
-            
-            # Create click record
-            click = EmailClick(
-                id=str(uuid.uuid4()),
-                tracker_id=tracker_id,
-                url=url,
-                timestamp=datetime.utcnow()
-            )
-            db.add(click)
-            db.commit()
+        if not tracker:
+            raise HTTPException(status_code=404, detail="Tracker not found")
+        
+        # Record click event
+        click = EmailClick(
+            id=str(uuid.uuid4()),
+            tracker_id=tracker_id,
+            url=url,
+            timestamp=datetime.utcnow()
+        )
+        db.add(click)
+        
+        # Update tracker stats
+        tracker.click_count += 1
+        tracker.updated_at = datetime.utcnow()
+        
+        # Create event record
+        event = EmailEvent(
+            id=str(uuid.uuid4()),
+            tracker_id=tracker_id,
+            event_type="click",
+            timestamp=datetime.utcnow(),
+            user_agent=str(request.headers.get("user-agent")),
+            ip_address=str(request.client.host)
+        )
+        db.add(event)
+        
+        db.commit()
         
         # Redirect to original URL
-        return Response(
-            status_code=302,
-            headers={"Location": url}
-        )
-    
+        return RedirectResponse(url=url)
+        
     except Exception as e:
-        # Redirect to URL even on error
-        return Response(
-            status_code=302,
-            headers={"Location": url}
-        )
+        logger.error(f"Click tracking error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/trackers/", response_model=List[EmailTrackerResponse])
 async def get_trackers(
@@ -510,13 +522,19 @@ async def get_trackers(
     limit: int = 100,
     db: Session = Depends(get_db)
 ):
-    """Get email trackers"""
-    query = db.query(EmailTracker)
-    if campaign_id:
-        query = query.filter(EmailTracker.campaign_id == campaign_id)
-    
-    trackers = query.offset(skip).limit(limit).all()
-    return trackers
+    """Get all email trackers with optional campaign filtering"""
+    try:
+        query = db.query(EmailTracker)
+        
+        if campaign_id:
+            query = query.filter(EmailTracker.campaign_id == campaign_id)
+        
+        trackers = query.order_by(EmailTracker.created_at.desc()).offset(skip).limit(limit).all()
+        return trackers
+        
+    except Exception as e:
+        logger.error(f"Error fetching trackers: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/trackers/{tracker_id}", response_model=EmailTrackerResponse)
 async def get_tracker(
@@ -925,7 +943,3 @@ async def health_check(db: Session = Depends(get_db)):
             "error": str(e),
             "timestamp": datetime.utcnow().isoformat()
         }
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8001)
