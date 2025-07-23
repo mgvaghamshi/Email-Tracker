@@ -85,6 +85,8 @@ class EmailEvent(Base):
     browser = Column(String)
     operating_system = Column(String)
     location = Column(String)
+    is_likely_preview = Column(Boolean, default=False)  # Flag for auto-preview detection
+    last_interaction = Column(DateTime)  # For tracking actual time spent
     
     tracker = relationship("EmailTracker", back_populates="events")
 

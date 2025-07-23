@@ -434,20 +434,50 @@ async def track_email_open(
             )
         
         try:
-            # Update open stats
-            if tracker.open_count is None:
-                tracker.open_count = 0
-            tracker.open_count += 1
-            if not tracker.opened_at:
-                tracker.opened_at = datetime.utcnow()
-            tracker.updated_at = datetime.utcnow()
+            # Get the last open event for this tracker
+            last_open = db.query(EmailEvent).filter(
+                EmailEvent.tracker_id == tracker_id,
+                EmailEvent.event_type == "open"
+            ).order_by(EmailEvent.timestamp.desc()).first()
+
+            current_time = datetime.utcnow()
             
-            # Parse User-Agent
-            user_agent_string = str(request.headers.get("user-agent"))
-            user_agent = parse(user_agent_string)
-            device_type = "mobile" if user_agent.is_mobile else "tablet" if user_agent.is_tablet else "desktop"
-            browser = f"{user_agent.browser.family} {user_agent.browser.version_string}"
-            os = f"{user_agent.os.family} {user_agent.os.version_string}"
+            # Check if this might be an auto-preview
+            user_agent_string = str(request.headers.get("user-agent", "")).lower()
+            is_likely_preview = any(x in user_agent_string for x in [
+                "preview", "prefetch", "googleimageproxy", "proxy", 
+                "office365", "outlook-ios", "mail.ru"
+            ])
+
+            # Only count as new open if:
+            # 1. No previous opens, or
+            # 2. At least 30 seconds since last open from same IP/UA
+            should_count = True
+            if last_open:
+                time_diff = current_time - last_open.timestamp
+                same_source = (
+                    last_open.ip_address == str(request.client.host) and
+                    last_open.user_agent == user_agent_string
+                )
+                if same_source and time_diff.total_seconds() < 30:
+                    should_count = False
+                    logger.info(f"Ignoring potential duplicate open event within 30s for tracker: {tracker_id}")
+
+            if should_count:
+                if tracker.open_count is None:
+                    tracker.open_count = 0
+                tracker.open_count += 1
+                if not tracker.opened_at:
+                    tracker.opened_at = current_time
+                tracker.updated_at = current_time
+                
+                # Parse User-Agent
+                user_agent = parse(user_agent_string)
+                device_type = "mobile" if user_agent.is_mobile else "tablet" if user_agent.is_tablet else "desktop"
+                browser = f"{user_agent.browser.family} {user_agent.browser.version_string}"
+                os = f"{user_agent.os.family} {user_agent.os.version_string}"
+                
+                logger.info(f"Recording new open event for tracker {tracker_id} - Device: {device_type}, Browser: {browser}, Preview: {is_likely_preview}")
             
             # Get location from IP (using ip-api.com - free tier)
             ip_address = str(request.client.host)
