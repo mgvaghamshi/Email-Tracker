@@ -12,6 +12,8 @@ import base64
 import hashlib
 import os
 from contextlib import asynccontextmanager
+from user_agents import parse
+import requests
 
 import logging
 logger = logging.getLogger(__name__)
@@ -410,6 +412,7 @@ async def send_bulk_email(
     db.commit()
     return responses
 
+
 @app.get("/track/open/{tracker_id}")
 async def track_email_open(
     tracker_id: str,
@@ -439,14 +442,40 @@ async def track_email_open(
                 tracker.opened_at = datetime.utcnow()
             tracker.updated_at = datetime.utcnow()
             
-            # Create event record
+            # Parse User-Agent
+            user_agent_string = str(request.headers.get("user-agent"))
+            user_agent = parse(user_agent_string)
+            device_type = "mobile" if user_agent.is_mobile else "tablet" if user_agent.is_tablet else "desktop"
+            browser = f"{user_agent.browser.family} {user_agent.browser.version_string}"
+            os = f"{user_agent.os.family} {user_agent.os.version_string}"
+            
+            # Get location from IP (using ip-api.com - free tier)
+            ip_address = str(request.client.host)
+            if ip_address not in ['127.0.0.1', 'localhost']:
+                try:
+                    location_response = requests.get(f'http://ip-api.com/json/{ip_address}')
+                    if location_response.status_code == 200:
+                        location_data = location_response.json()
+                        location = f"{location_data.get('city', '')}, {location_data.get('country', '')}"
+                    else:
+                        location = "Unknown"
+                except:
+                    location = "Unknown"
+            else:
+                location = "Local"
+            
+            # Create detailed event record
             event = EmailEvent(
                 id=str(uuid.uuid4()),
                 tracker_id=tracker_id,
                 event_type="open",
                 timestamp=datetime.utcnow(),
-                user_agent=str(request.headers.get("user-agent")),
-                ip_address=str(request.client.host)
+                user_agent=user_agent_string,
+                ip_address=ip_address,
+                device_type=device_type,
+                browser=browser,
+                operating_system=os,
+                location=location
             )
             db.add(event)
             

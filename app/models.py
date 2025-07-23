@@ -81,6 +81,10 @@ class EmailEvent(Base):
     timestamp = Column(DateTime, default=datetime.utcnow)
     user_agent = Column(Text)
     ip_address = Column(String)
+    device_type = Column(String)  # mobile, tablet, desktop
+    browser = Column(String)
+    operating_system = Column(String)
+    location = Column(String)
     
     tracker = relationship("EmailTracker", back_populates="events")
 
