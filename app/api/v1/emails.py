@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
+import os
 from datetime import datetime
 
 from ...dependencies import get_db, get_api_key
@@ -308,10 +309,15 @@ async def send_email_task(email_request: EmailSendRequest, tracker_id: str):
     try:
         email_service = EmailService()
         
+        # Generate tracking pixel URL
+        base_url = os.getenv("BASE_URL", "http://localhost:8001")
+        tracking_pixel_url = f"{base_url}/api/v1/track/open/{tracker_id}"
+        
         # Send the email
         success = await email_service.send_email(
             email_request=email_request,
-            tracker_id=tracker_id
+            tracker_id=tracker_id,
+            tracking_pixel_url=tracking_pixel_url
         )
         
         # Update tracker status
