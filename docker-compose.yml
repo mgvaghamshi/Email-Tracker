@@ -1,65 +1,99 @@
 version: '3.8'
 
 services:
-  app:
-    build: .
+  # EmailTracker API Service
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: emailtracker-api
     ports:
-      - "8000:8000"
+      - "8001:8001"
     depends_on:
       - db
       - redis
     environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/email_tracker
-      - REDIS_URL=redis://redis:6379
       - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://postgres:password@db:5432/email_tracker
+      - REDIS_URL=redis://redis:6379/0
+      - BASE_URL=http://localhost:8001
+      - DEBUG=true
     volumes:
       - .:/app
+      - ./logs:/app/logs
     env_file:
       - .env
+    restart: unless-stopped
+    networks:
+      - emailtracker-network
 
+  # PostgreSQL Database
   db:
-    image: postgres:15
+    image: postgres:15-alpine
+    container_name: emailtracker-db
     environment:
       - POSTGRES_DB=email_tracker
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     ports:
       - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - emailtracker-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # Redis Cache & Message Broker
   redis:
     image: redis:7-alpine
+    container_name: emailtracker-redis
+    command: redis-server --appendonly yes --requirepass ""
+    volumes:
+      - redis_data:/data
     ports:
       - "6379:6379"
+    restart: unless-stopped
+    networks:
+      - emailtracker-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
 
-  celery_worker:
-    build: .
-    command: celery -A main.celery worker --loglevel=info
-    depends_on:
-      - db
-      - redis
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/email_tracker
-      - REDIS_URL=redis://redis:6379
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: emailtracker-nginx
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
-      - .:/app
-    env_file:
-      - .env
-
-  celery_beat:
-    build: .
-    command: celery -A main.celery beat --loglevel=info
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
     depends_on:
-      - db
-      - redis
-    environment:
-      - DATABASE_URL=postgresql://postgres:password@db:5432/email_tracker
-      - REDIS_URL=redis://redis:6379
-    volumes:
-      - .:/app
-    env_file:
-      - .env
+      - api
+    restart: unless-stopped
+    networks:
+      - emailtracker-network
+    profiles:
+      - with-nginx
 
+# Volumes for persistent data
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# Network for service communication
+networks:
+  emailtracker-network:
+    driver: bridge

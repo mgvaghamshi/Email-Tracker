@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: emailtracker-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: ./start.sh
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG  
+        value: false
+      - key: ENABLE_DOCS
+        value: true
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: emailtracker-db
+          property: connectionString
+    healthCheckPath: /health
+    
+databases:
+  - name: emailtracker-db
+    databaseName: email_tracker
+    user: emailtracker_user

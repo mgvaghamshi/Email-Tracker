@@ -1,0 +1,34 @@
+# Development Docker Compose Override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+version: '3.8'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development  # If we had multi-stage build
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - RELOAD_ON_CHANGE=true
+    volumes:
+      - .:/app:cached  # Use cached for better performance on macOS
+      - /app/__pycache__  # Exclude pycache
+      - /app/.pytest_cache  # Exclude pytest cache
+    command: ["python3", "run.py", "--reload", "--debug", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "8001:8001"
+    stdin_open: true
+    tty: true
+
+  db:
+    environment:
+      - POSTGRES_DB=email_tracker_dev
+    ports:
+      - "5433:5432"  # Different port for dev to avoid conflicts
+
+  redis:
+    ports:
+      - "6380:6379"  # Different port for dev to avoid conflicts

@@ -20,6 +20,7 @@ class Settings(BaseModel):
     # API Configuration
     api_v1_prefix: str = "/api/v1"
     base_url: str = "http://localhost:8001"
+    port: int = 8001
     
     # Database Configuration
     database_url: str = "sqlite:///./email_tracker.db"

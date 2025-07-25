@@ -1,0 +1,81 @@
+# Production Docker Compose Override
+# Use with: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  api:
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - RELOAD_ON_CHANGE=false
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+    volumes:
+      - ./logs:/app/logs  # Only mount logs, not source code
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    environment:
+      - POSTGRES_DB=email_tracker_prod
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    ports: []  # Don't expose DB port in production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  redis:
+    command: redis-server --appendonly yes --requirepass "${REDIS_PASSWORD:-}"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.125'
+    ports: []  # Don't expose Redis port in production
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  nginx:
+    profiles: []  # Always include nginx in production
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.125'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
