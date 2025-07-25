@@ -13,8 +13,8 @@ from datetime import datetime
 import base64
 import certifi
 
-from .models import EmailTracker
-from .schemas import EmailSendRequest
+from ..database.models import EmailTracker
+from ..schemas.email import EmailSendRequest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -119,97 +119,6 @@ class EmailService:
             html_content += footer
             
         return html_content
-    
-    # async def send_email(self, email_request: EmailSendRequest, tracker_id: str, tracking_pixel_url: str) -> bool:
-    #     """Send email with tracking and improved SSL handling"""
-    #     try:
-    #         # Create message
-    #         message = MIMEMultipart('alternative')
-    #         message['Subject'] = email_request.subject
-    #         message['From'] = formataddr((email_request.from_name, email_request.from_email))
-    #         message['To'] = email_request.to_email
-            
-    #         if email_request.reply_to:
-    #             message['Reply-To'] = email_request.reply_to
-            
-    #         # Add text content
-    #         if email_request.text_content:
-    #             text_part = MIMEText(email_request.text_content, 'plain')
-    #             message.attach(text_part)
-            
-    #         # Add HTML content with tracking
-    #         if email_request.html_content:
-    #             html_content = email_request.html_content
-                
-    #             # Add tracking pixel
-    #             html_content = self.add_tracking_pixel(html_content, tracking_pixel_url)
-                
-    #             # Add click tracking
-    #             html_content = self.add_click_tracking(html_content, tracker_id)
-                
-    #             # Add unsubscribe footer
-    #             html_content = self.add_unsubscribe_footer(html_content, tracker_id)
-                
-    #             html_part = MIMEText(html_content, 'html')
-    #             message.attach(html_part)
-            
-    #         # Handle attachments if any
-    #         if email_request.attachments:
-    #             for attachment_data in email_request.attachments:
-    #                 # Assuming attachment_data is base64 encoded
-    #                 attachment_bytes = base64.b64decode(attachment_data)
-    #                 part = MIMEBase('application', 'octet-stream')
-    #                 part.set_payload(attachment_bytes)
-    #                 encoders.encode_base64(part)
-    #                 part.add_header(
-    #                     'Content-Disposition',
-    #                     f'attachment; filename="attachment"'
-    #                 )
-    #                 message.attach(part)
-            
-    #         # Send email with improved SSL context
-    #         context = self.create_ssl_context()
-            
-    #         try:
-    #             # First attempt with STARTTLS
-    #             with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-    #                 server.starttls(context=context)
-    #                 server.login(self.smtp_username, self.smtp_password)
-    #                 server.send_message(message)
-                    
-    #         except Exception as starttls_error:
-    #             logger.warning(f"STARTTLS failed: {starttls_error}")
-                
-    #             # Fallback attempt with SSL direct connection
-    #             try:
-    #                 with smtplib.SMTP_SSL(self.smtp_server, 465, context=context) as server:
-    #                     server.login(self.smtp_username, self.smtp_password)
-    #                     server.send_message(message)
-    #                     logger.info("Email sent using direct SSL connection")
-                        
-    #             except Exception as ssl_error:
-    #                 logger.warning(f"Direct SSL failed: {ssl_error}")
-                    
-    #                 # Final fallback with unverified SSL for development
-    #                 if not self.verify_ssl:
-    #                     unverified_context = ssl.create_default_context()
-    #                     unverified_context.check_hostname = False
-    #                     unverified_context.verify_mode = ssl.CERT_NONE
-                        
-    #                     with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-    #                         server.starttls(context=unverified_context)
-    #                         server.login(self.smtp_username, self.smtp_password)
-    #                         server.send_message(message)
-    #                         logger.warning("Email sent with unverified SSL")
-    #                 else:
-    #                     raise ssl_error
-            
-    #         logger.info(f"Email sent successfully to {email_request.to_email}")
-    #         return True
-            
-    #     except Exception as e:
-    #         logger.error(f"Failed to send email to {email_request.to_email}: {str(e)}")
-    #         return False
 
     async def send_email(self, email_request: EmailSendRequest, tracker_id: str, tracking_pixel_url: str) -> bool:
         """Send email with tracking and improved SSL handling"""
@@ -269,7 +178,7 @@ class EmailService:
             # Update tracker status in database
             if success:
                 try:
-                    from .database import SessionLocal
+                    from ..database.connection import SessionLocal
                     db = SessionLocal()
                     try:
                         tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()

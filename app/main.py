@@ -1,1004 +1,351 @@
-from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, RedirectResponse
-from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime, timedelta
-import uuid
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-import base64
-import hashlib
-import os
-from contextlib import asynccontextmanager
-from user_agents import parse
-import requests
+"""
+EmailTracker API - Professional email sending and tracking service
 
+A comprehensive email infrastructure service similar to Mailgun, providing:
+- Email sending with tracking
+- Open and click tracking
+- Bounce handling
+- Analytics and reporting
+- API key management
+- Webhook notifications
+"""
+
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
+from fastapi.openapi.utils import get_openapi
+from contextlib import asynccontextmanager
 import logging
+import time
+from typing import Dict, Any
+
+from .config import settings
+from .database.connection import init_db
+from .api.v1 import auth, emails, tracking, analytics, webhooks
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 
-from .database import SessionLocal, engine, Base, init_db
-from .models import EmailCampaign, EmailTracker, EmailEvent, EmailBounce, EmailClick, EmailTemplate, EmailList, EmailSubscriber
-from .schemas import (
-    EmailCampaignCreate, EmailCampaignResponse, EmailTrackerCreate, 
-    EmailTrackerResponse, EmailEventResponse, EmailAnalytics,
-    EmailSendRequest, EmailSendResponse, BulkEmailSendRequest,
-    EmailTemplateCreate, EmailTemplateResponse, EmailListCreate,
-    EmailListResponse, EmailSubscriberCreate, EmailSubscriberResponse,EmailCampaignWithStats,CampaignTrackingResponse, CampaignUpdate
-)
-from .email_service import EmailService
-
-# Initialize database tables
-init_db()
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Application lifespan events"""
     # Startup
+    logger.info("🚀 Starting EmailTracker API...")
+    logger.info(f"📊 Environment: {'Development' if settings.debug else 'Production'}")
+    logger.info(f"🔗 Base URL: {settings.base_url}")
+    
+    # Initialize database
+    try:
+        init_db()
+        logger.info("✅ Database initialized successfully")
+    except Exception as e:
+        logger.error(f"❌ Database initialization failed: {e}")
+        raise
+    
     yield
+    
     # Shutdown
-    pass
+    logger.info("📴 EmailTracker API shutdown complete")
 
+
+# Create FastAPI app with custom OpenAPI
 app = FastAPI(
-    title="Email Tracker API",
-    description="A comprehensive email tracking API similar to Mailgun",
-    version="1.0.0",
-    lifespan=lifespan
+    title=settings.app_name,
+    description="""
+## EmailTracker API - Professional Email Infrastructure
+
+A comprehensive email sending and tracking service designed for developers and businesses.
+Similar to Mailgun, this API provides enterprise-grade email delivery with detailed analytics.
+
+### 🚀 Key Features
+
+- **Email Sending**: Send single emails or bulk campaigns
+- **Real-time Tracking**: Track opens, clicks, bounces, and complaints
+- **Analytics**: Comprehensive engagement analytics and reporting
+- **API Keys**: Secure authentication with rate limiting
+- **Webhooks**: Real-time event notifications
+- **Bot Detection**: Intelligent filtering of bot traffic
+- **High Deliverability**: Optimized for inbox delivery
+
+### 🔐 Authentication
+
+All API endpoints require authentication using API keys. Include your API key in the Authorization header:
+
+```
+Authorization: Bearer your_api_key_here
+```
+
+Create your first API key using the `/api/v1/auth/api-keys` endpoint.
+
+### 📊 Rate Limits
+
+Rate limits are enforced per API key:
+- Default: 100 requests per minute, 10,000 per day
+- Configurable per API key
+- HTTP 429 response when exceeded
+
+### 🔗 Useful Links
+
+- [Documentation](https://docs.emailtracker.com)
+- [SDKs and Libraries](https://github.com/emailtracker)
+- [Status Page](https://status.emailtracker.com)
+- [Support](mailto:support@emailtracker.com)
+
+### 📝 Examples
+
+#### Send a Single Email
+```bash
+curl -X POST "https://api.emailtracker.com/api/v1/emails/send" \\
+     -H "Authorization: Bearer your_api_key" \\
+     -H "Content-Type: application/json" \\
+     -d '{
+       "to_email": "user@example.com",
+       "from_email": "sender@yourcompany.com",
+       "from_name": "Your Company",
+       "subject": "Welcome!",
+       "html_content": "<h1>Welcome to our service!</h1>"
+     }'
+```
+
+#### Get Campaign Analytics
+```bash
+curl -H "Authorization: Bearer your_api_key" \\
+     "https://api.emailtracker.com/api/v1/analytics/campaigns/your_campaign_id"
+```
+
+### 📞 Support
+
+Need help? Contact our support team:
+- Email: support@emailtracker.com
+- Documentation: https://docs.emailtracker.com
+- Status: https://status.emailtracker.com
+    """,
+    version=settings.app_version,
+    lifespan=lifespan,
+    docs_url=None,  # We'll create custom docs
+    redoc_url=None,
+    openapi_url="/api/v1/openapi.json",
+    contact={
+        "name": "EmailTracker Support",
+        "email": "support@emailtracker.com",
+        "url": "https://docs.emailtracker.com"
+    },
+    license_info={
+        "name": "Commercial License",
+        "url": "https://emailtracker.com/license"
+    },
+    servers=[
+        {
+            "url": settings.base_url,
+            "description": "Production server"
+        },
+        {
+            "url": "http://localhost:8001",
+            "description": "Development server"
+        }
+    ]
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly in production
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Dependency to get database session
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Custom middleware for request logging and timing
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all requests with timing information"""
+    start_time = time.time()
+    
+    # Log request
+    logger.info(f"🔄 {request.method} {request.url.path} - Client: {request.client.host if request.client else 'unknown'}")
+    
+    # Process request
+    response = await call_next(request)
+    
+    # Calculate duration
+    duration = time.time() - start_time
+    
+    # Log response
+    status_emoji = "✅" if response.status_code < 400 else "❌"
+    logger.info(f"{status_emoji} {request.method} {request.url.path} - {response.status_code} - {duration:.3f}s")
+    
+    # Add timing header
+    response.headers["X-Process-Time"] = str(duration)
+    
+    return response
 
-# Initialize email service
-email_service = EmailService()
+# Include API routers
+app.include_router(auth.router, prefix=settings.api_v1_prefix)
+app.include_router(emails.router, prefix=settings.api_v1_prefix)
+app.include_router(tracking.router, prefix=settings.api_v1_prefix)
+app.include_router(analytics.router, prefix=settings.api_v1_prefix)
+app.include_router(webhooks.router, prefix=settings.api_v1_prefix)
 
-@app.get("/")
-async def root():
-    return {"message": "Email Tracker API is running"}
-
-@app.post("/campaigns/", response_model=EmailCampaignResponse)
-async def create_campaign(
-    campaign: EmailCampaignCreate,
-    db: Session = Depends(get_db)
-):
-    """Create a new email campaign"""
-    db_campaign = EmailCampaign(
-        id=str(uuid.uuid4()),
-        name=campaign.name,
-        description=campaign.description,
-        created_at=datetime.utcnow()
-    )
-    db.add(db_campaign)
-    db.commit()
-    db.refresh(db_campaign)
-    return db_campaign
-
-@app.put("/campaigns/{campaign_id}", response_model=EmailCampaignResponse)
-async def update_campaign(
-    campaign_id: str,
-    campaign_update: CampaignUpdate,
-    db: Session = Depends(get_db)
-):
-    """Update an existing campaign"""
-    # Find the campaign
-    campaign = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+# Health check endpoints
+@app.get("/health", tags=["Health"])
+async def health_check():
+    """
+    Health check endpoint
     
-    if not campaign:
-        # Try to create campaign from tracker data
-        tracker = db.query(EmailTracker).filter(
-            EmailTracker.campaign_id == campaign_id
-        ).first()
-        
-        if tracker:
-            campaign = EmailCampaign(
-                id=campaign_id,
-                name=f"Campaign {campaign_id[:8]}",
-                description="Auto-created from existing tracker",
-                created_at=tracker.created_at,
-                updated_at=datetime.utcnow()
-            )
-            db.add(campaign)
-            db.commit()
-            logger.info(f"Created missing campaign: {campaign_id}")
-        else:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # Update only provided fields
-    if campaign_update.sent is not None:
-        campaign.sent = campaign_update.sent
-    if campaign_update.name is not None:
-        campaign.name = campaign_update.name
-    if campaign_update.description is not None:
-        campaign.description = campaign_update.description
-    
-    # Always update the updated_at timestamp
-    campaign.updated_at = datetime.utcnow()
-    
-    # Save changes
-    db.commit()
-    db.refresh(campaign)
-    
-    return campaign
-
-@app.get("/campaigns/", response_model=List[CampaignTrackingResponse])
-async def get_campaigns(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get all email campaigns with tracking details"""
-    try: 
-        # Query trackers with campaign join
-        trackers = db.query(EmailTracker).join(
-            EmailCampaign,
-            EmailTracker.campaign_id == EmailCampaign.id,
-            isouter=True  # Left outer join
-        ).offset(skip).limit(limit).all()
-        
-        # Format response
-        result = []
-        for tracker in trackers:
-            result.append({
-                "id": tracker.id,
-                "name": tracker.name,
-                "company": tracker.company,
-                "position": tracker.position,
-                "email": tracker.recipient_email,
-                "subject": tracker.subject,
-                "content": tracker.body,
-                "sent": tracker.delivered,
-                "created_at": tracker.sent_at or tracker.created_at,
-                "updated_at": tracker.updated_at or tracker.created_at,
-                "campaign_id": tracker.campaign_id,
-                "campaign_name": tracker.campaign.name if tracker.campaign else None,
-                "campaign_description": tracker.campaign.description if tracker.campaign else None
-            })
-        
-        return result
-    
-    except Exception as e:
-        logger.error(f"Error fetching campaigns: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/campaigns/{campaign_id}", response_model=EmailCampaignResponse)
-async def get_campaign(
-    campaign_id: str,
-    db: Session = Depends(get_db)
-):
-    """Get a specific campaign with statistics"""
-    campaign = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # Get trackers for this campaign
-    trackers = db.query(EmailTracker).filter(EmailTracker.campaign_id == campaign_id).all()
-    
-    # Calculate stats
-    total_sent = len(trackers)
-    total_opens = sum(1 for t in trackers if t.opened_at)
-    total_clicks = sum(t.click_count for t in trackers)
-    
-    # Add stats to campaign
-    campaign_dict = {
-        "id": campaign.id,
-        "name": campaign.name,
-        "description": campaign.description,
-        "created_at": campaign.created_at,
-        "total_sent": total_sent,
-        "total_opens": total_opens,
-        "total_clicks": total_clicks,
-        "open_rate": round((total_opens / total_sent * 100) if total_sent > 0 else 0, 2),
-        "click_rate": round((total_clicks / total_sent * 100) if total_sent > 0 else 0, 2)
-    }
-    
-    return campaign_dict
-@app.get("/campaigns/recent", response_model=List[EmailCampaignResponse])
-async def get_recent_campaigns(
-    days: int = 30,
-    db: Session = Depends(get_db)
-):
-    """Get campaigns with recent email activity"""
-    from datetime import datetime, timedelta
-    
-    # Get campaigns that have emails sent in the last N days
-    recent_date = datetime.utcnow() - timedelta(days=days)
-    
-    campaigns_with_recent_activity = db.query(EmailCampaign).join(
-        EmailTracker, EmailCampaign.id == EmailTracker.campaign_id
-    ).filter(
-        EmailTracker.created_at >= recent_date
-    ).distinct().all()
-    
-    campaigns_with_stats = []
-    for campaign in campaigns_with_recent_activity:
-        # Get recent trackers
-        trackers = db.query(EmailTracker).filter(
-            EmailTracker.campaign_id == campaign.id,
-            EmailTracker.created_at >= recent_date
-        ).all()
-        
-        total_sent = len(trackers)
-        total_opens = sum(1 for t in trackers if t.opened_at)
-        total_clicks = sum(t.click_count for t in trackers)
-        
-        campaign_dict = {
-            "id": campaign.id,
-            "name": campaign.name,
-            "description": campaign.description,
-            "created_at": campaign.created_at,
-            "total_sent": total_sent,
-            "total_opens": total_opens,
-            "total_clicks": total_clicks,
-            "open_rate": round((total_opens / total_sent * 100) if total_sent > 0 else 0, 2),
-            "click_rate": round((total_clicks / total_sent * 100) if total_sent > 0 else 0, 2),
-            "last_email_sent": max((t.created_at for t in trackers), default=None)
-        }
-        campaigns_with_stats.append(campaign_dict)
-    
-    return campaigns_with_stats
-
-@app.post("/send-email/", response_model=EmailSendResponse)
-async def send_email(
-    email_request: EmailSendRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-    """Send a single email with tracking"""
-    try:
-        # Create campaign if it doesn't exist
-        campaign = db.query(EmailCampaign).filter(
-            EmailCampaign.id == email_request.campaign_id
-        ).first()
-        
-        if not campaign:
-            campaign = EmailCampaign(
-                id=email_request.campaign_id,
-                name=f"Campaign {email_request.campaign_id[:8]}",
-                description=f"Auto-created campaign for {email_request.subject}",
-                created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
-            )
-            db.add(campaign)
-            db.commit()
-            logger.info(f"Created new campaign: {campaign.id}")
-
-        # Create email tracker
-        tracker_id = str(uuid.uuid4())
-        tracking_pixel_url = f"{os.getenv('BASE_URL')}/track/open/{tracker_id}"
-
-        # Use company name from environment if not provided
-        if not email_request.from_name:
-            email_request.from_name = os.getenv('SENDER_NAME')
-
-        # Create tracker record
-        db_tracker = EmailTracker(
-            id=tracker_id,
-            campaign_id=email_request.campaign_id,
-            name=email_request.to_name,  # Add recipient name
-            company=email_request.company,  # Add company
-            position=email_request.position,  # Add position
-            email=email_request.to_email,  # Required email field
-            subject=email_request.subject,
-            body=email_request.html_content or email_request.text_content,  # Store content
-            delivered=False,  # Will be updated after sending
-            recipient_email=email_request.to_email,
-            sender_email=email_request.from_email,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
-        )
-        db.add(db_tracker)
-        db.commit()
-        
-        async def send_and_update():
-            success = await email_service.send_email(
-                email_request,
-                tracker_id,
-                tracking_pixel_url
-            )
-            if not success:
-                logger.error(f"Failed to send email to {email_request.to_email}")
-                
-        background_tasks.add_task(send_and_update)
-        
-        return EmailSendResponse(
-            success=True,
-            message=f"Email queued successfully for {email_request.to_email}",
-            tracker_id=tracker_id,
-            status="queued",
-            campaign_id=email_request.campaign_id
-        )
-    
-    except Exception as e:
-        logger.error(f"Error sending email: {str(e)}")
-        
-        # Return appropriate error messages based on error type
-        if "certificate verify failed" in str(e).lower():
-            return EmailSendResponse(
-                success=False,
-                message="SSL certificate error. Please check email server configuration.",
-                error="SSL_CERT_ERROR"
-            )
-        elif "authentication failed" in str(e).lower():
-            return EmailSendResponse(
-                success=False,
-                message="Email authentication failed. Please check credentials.",
-                error="AUTH_ERROR"
-            )
-        elif "invalid recipient" in str(e).lower():
-            return EmailSendResponse(
-                success=False,
-                message="Invalid recipient email address.",
-                error="INVALID_RECIPIENT"
-            )
-        else:
-            return EmailSendResponse(
-                success=False,
-                message="An unexpected error occurred while sending email.",
-                error="UNKNOWN_ERROR"
-            )
-
-@app.post("/send-bulk-email/", response_model=List[EmailSendResponse])
-async def send_bulk_email(
-    bulk_request: BulkEmailSendRequest,
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
-):
-    """Send bulk emails with tracking"""
-    responses = []
-    
-    for recipient in bulk_request.recipients:
-        try:
-            # Create individual email request
-            email_request = EmailSendRequest(
-                campaign_id=bulk_request.campaign_id,
-                to_email=recipient,
-                from_email=bulk_request.from_email,
-                subject=bulk_request.subject,
-                html_content=bulk_request.html_content,
-                text_content=bulk_request.text_content
-            )
-            
-            # Create email tracker
-            tracker_id = str(uuid.uuid4())
-            tracking_pixel_url = f"{os.getenv('BASE_URL')}/track/open/{tracker_id}"
-            
-            # Create tracker record
-            db_tracker = EmailTracker(
-                id=tracker_id,
-                campaign_id=bulk_request.campaign_id,
-                recipient_email=recipient,
-                sender_email=bulk_request.from_email,
-                subject=bulk_request.subject,
-                created_at=datetime.utcnow()
-            )
-            db.add(db_tracker)
-            
-            # Send email in background
-            background_tasks.add_task(
-                email_service.send_email,
-                email_request,
-                tracker_id,
-                tracking_pixel_url
-            )
-            
-            responses.append(EmailSendResponse(
-                message="Email queued for sending",
-                tracker_id=tracker_id,
-                status="queued"
-            ))
-            
-        except Exception as e:
-            responses.append(EmailSendResponse(
-                message=f"Failed to queue email: {str(e)}",
-                tracker_id="",
-                status="failed"
-            ))
-    
-    db.commit()
-    return responses
-
-
-@app.get("/track/open/{tracker_id}")
-async def track_email_open(
-    tracker_id: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Track email opens via tracking pixel"""
-    try:
-        logger.info(f"Processing open tracking for tracker_id: {tracker_id}")
-        
-        # Get tracker
-        tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()
-        if not tracker:
-            logger.error(f"Tracker not found: {tracker_id}")
-            # Return pixel even if tracker not found to avoid breaking email clients
-            return Response(
-                content=b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
-                media_type='image/gif'
-            )
-        
-        try:
-            # Get the last open event for this tracker
-            last_open = db.query(EmailEvent).filter(
-                EmailEvent.tracker_id == tracker_id,
-                EmailEvent.event_type == "open"
-            ).order_by(EmailEvent.timestamp.desc()).first()
-
-            current_time = datetime.utcnow()
-            
-            # Check if this might be an auto-preview
-            user_agent_string = str(request.headers.get("user-agent", "")).lower()
-            is_likely_preview = any(x in user_agent_string for x in [
-                "preview", "prefetch", "googleimageproxy", "proxy", 
-                "office365", "outlook-ios", "mail.ru"
-            ])
-
-            # Only count as new open if:
-            # 1. No previous opens, or
-            # 2. At least 30 seconds since last open from same IP/UA
-            should_count = True
-            if last_open:
-                time_diff = current_time - last_open.timestamp
-                same_source = (
-                    last_open.ip_address == str(request.client.host) and
-                    last_open.user_agent == user_agent_string
-                )
-                if same_source and time_diff.total_seconds() < 30:
-                    should_count = False
-                    logger.info(f"Ignoring potential duplicate open event within 30s for tracker: {tracker_id}")
-
-            if should_count:
-                if tracker.open_count is None:
-                    tracker.open_count = 0
-                tracker.open_count += 1
-                if not tracker.opened_at:
-                    tracker.opened_at = current_time
-                tracker.updated_at = current_time
-                
-                # Parse User-Agent
-                user_agent = parse(user_agent_string)
-                device_type = "mobile" if user_agent.is_mobile else "tablet" if user_agent.is_tablet else "desktop"
-                browser = f"{user_agent.browser.family} {user_agent.browser.version_string}"
-                os = f"{user_agent.os.family} {user_agent.os.version_string}"
-                
-                logger.info(f"Recording new open event for tracker {tracker_id} - Device: {device_type}, Browser: {browser}, Preview: {is_likely_preview}")
-            
-            # Get location from IP (using ip-api.com - free tier)
-            ip_address = str(request.client.host)
-            if ip_address not in ['127.0.0.1', 'localhost']:
-                try:
-                    location_response = requests.get(f'http://ip-api.com/json/{ip_address}')
-                    if location_response.status_code == 200:
-                        location_data = location_response.json()
-                        location = f"{location_data.get('city', '')}, {location_data.get('country', '')}"
-                    else:
-                        location = "Unknown"
-                except:
-                    location = "Unknown"
-            else:
-                location = "Local"
-            
-            # Create detailed event record
-            event = EmailEvent(
-                id=str(uuid.uuid4()),
-                tracker_id=tracker_id,
-                event_type="open",
-                timestamp=datetime.utcnow(),
-                user_agent=user_agent_string,
-                ip_address=ip_address,
-                device_type=device_type,
-                browser=browser,
-                operating_system=os,
-                location=location
-            )
-            db.add(event)
-            
-            # Commit changes
-            db.commit()
-            logger.info(f"Successfully recorded open event for tracker: {tracker_id}")
-            
-        except Exception as db_error:
-            logger.error(f"Database error while recording open event: {str(db_error)}")
-            db.rollback()  # Rollback on error
-        
-        # Always return the pixel, even if tracking fails
-        return Response(
-            content=b'GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00!\xf9\x04\x01\x00\x00\x00\x00,\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;',
-            media_type='image/gif'
-        )
-        
-    except Exception as e:
-        logger.error(f"Open tracking error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/track/click/{tracker_id}")
-async def track_email_click(
-    tracker_id: str,
-    url: str,
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Track email link clicks"""
-    try:
-        # Get tracker
-        tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()
-        if not tracker:
-            raise HTTPException(status_code=404, detail="Tracker not found")
-        
-        # Record click event
-        click = EmailClick(
-            id=str(uuid.uuid4()),
-            tracker_id=tracker_id,
-            url=url,
-            timestamp=datetime.utcnow()
-        )
-        db.add(click)
-        
-        # Update tracker stats
-        tracker.click_count += 1
-        tracker.updated_at = datetime.utcnow()
-        
-        # Create event record
-        event = EmailEvent(
-            id=str(uuid.uuid4()),
-            tracker_id=tracker_id,
-            event_type="click",
-            timestamp=datetime.utcnow(),
-            user_agent=str(request.headers.get("user-agent")),
-            ip_address=str(request.client.host)
-        )
-        db.add(event)
-        
-        db.commit()
-        
-        # Redirect to original URL
-        return RedirectResponse(url=url)
-        
-    except Exception as e:
-        logger.error(f"Click tracking error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/trackers/", response_model=List[EmailTrackerResponse])
-async def get_trackers(
-    campaign_id: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get all email trackers with optional campaign filtering"""
-    try:
-        query = db.query(EmailTracker)
-        
-        if campaign_id:
-            query = query.filter(EmailTracker.campaign_id == campaign_id)
-        
-        trackers = query.order_by(EmailTracker.created_at.desc()).offset(skip).limit(limit).all()
-        return trackers
-        
-    except Exception as e:
-        logger.error(f"Error fetching trackers: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/trackers/{tracker_id}", response_model=EmailTrackerResponse)
-async def get_tracker(
-    tracker_id: str,
-    db: Session = Depends(get_db)
-):
-    """Get specific email tracker"""
-    tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()
-    if not tracker:
-        raise HTTPException(status_code=404, detail="Tracker not found")
-    return tracker
-
-@app.get("/trackers/{tracker_id}/events", response_model=List[EmailEventResponse])
-async def get_tracker_events(
-    tracker_id: str,
-    db: Session = Depends(get_db)
-):
-    """Get events for a specific tracker"""
-    events = db.query(EmailEvent).filter(EmailEvent.tracker_id == tracker_id).all()
-    return events
-
-@app.get("/campaigns/{campaign_id}/analytics", response_model=EmailAnalytics)
-async def get_campaign_analytics(
-    campaign_id: str,
-    db: Session = Depends(get_db)
-):
-    """Get analytics for a campaign"""
-    # Get campaign
-    campaign = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # Get trackers for this campaign
-    trackers = db.query(EmailTracker).filter(EmailTracker.campaign_id == campaign_id).all()
-    
-    # Calculate analytics
-    total_sent = len(trackers)
-    total_opens = sum(1 for t in trackers if t.opened_at)
-    total_clicks = sum(t.click_count for t in trackers)
-    total_bounces = db.query(EmailBounce).join(EmailTracker).filter(
-        EmailTracker.campaign_id == campaign_id
-    ).count()
-    
-    # Calculate rates
-    open_rate = (total_opens / total_sent * 100) if total_sent > 0 else 0
-    click_rate = (total_clicks / total_sent * 100) if total_sent > 0 else 0
-    bounce_rate = (total_bounces / total_sent * 100) if total_sent > 0 else 0
-    
-    return EmailAnalytics(
-        campaign_id=campaign_id,
-        total_sent=total_sent,
-        total_opens=total_opens,
-        total_clicks=total_clicks,
-        total_bounces=total_bounces,
-        open_rate=round(open_rate, 2),
-        click_rate=round(click_rate, 2),
-        bounce_rate=round(bounce_rate, 2)
-    )
-
-@app.post("/webhooks/bounce")
-async def handle_bounce_webhook(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Handle bounce webhooks from email service"""
-    try:
-        data = await request.json()
-        
-        # Create bounce record
-        bounce = EmailBounce(
-            id=str(uuid.uuid4()),
-            tracker_id=data.get("tracker_id"),
-            bounce_type=data.get("bounce_type", "hard"),
-            reason=data.get("reason", ""),
-            timestamp=datetime.utcnow()
-        )
-        db.add(bounce)
-        db.commit()
-        
-        return {"status": "success"}
-    
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-
-# Additional endpoints to add to main.py
-
-# Template endpoints
-@app.post("/templates/", response_model=EmailTemplateResponse)
-async def create_template(
-    template: EmailTemplateCreate,
-    db: Session = Depends(get_db)
-):
-    """Create a new email template"""
-    from models import EmailTemplate
-    
-    db_template = EmailTemplate(
-        id=str(uuid.uuid4()),
-        name=template.name,
-        subject=template.subject,
-        html_content=template.html_content,
-        text_content=template.text_content,
-        created_at=datetime.utcnow()
-    )
-    db.add(db_template)
-    db.commit()
-    db.refresh(db_template)
-    return db_template
-
-@app.get("/templates/", response_model=List[EmailTemplateResponse])
-async def get_templates(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get all email templates"""
-    from models import EmailTemplate
-    templates = db.query(EmailTemplate).filter(
-        EmailTemplate.is_active == True
-    ).offset(skip).limit(limit).all()
-    return templates
-
-@app.get("/templates/{template_id}", response_model=EmailTemplateResponse)
-async def get_template(
-    template_id: str,
-    db: Session = Depends(get_db)
-):
-    """Get a specific template"""
-    from models import EmailTemplate
-    template = db.query(EmailTemplate).filter(
-        EmailTemplate.id == template_id
-    ).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-    return template
-
-@app.put("/templates/{template_id}", response_model=EmailTemplateResponse)
-async def update_template(
-    template_id: str,
-    template_update: EmailTemplateCreate,
-    db: Session = Depends(get_db)
-):
-    """Update a template"""
-    from models import EmailTemplate
-    template = db.query(EmailTemplate).filter(
-        EmailTemplate.id == template_id
-    ).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-    
-    template.name = template_update.name
-    template.subject = template_update.subject
-    template.html_content = template_update.html_content
-    template.text_content = template_update.text_content
-    template.updated_at = datetime.utcnow()
-    
-    db.commit()
-    db.refresh(template)
-    return template
-
-@app.delete("/templates/{template_id}")
-async def delete_template(
-    template_id: str,
-    db: Session = Depends(get_db)
-):
-    """Delete a template (soft delete)"""
-    from models import EmailTemplate
-    template = db.query(EmailTemplate).filter(
-        EmailTemplate.id == template_id
-    ).first()
-    if not template:
-        raise HTTPException(status_code=404, detail="Template not found")
-    
-    template.is_active = False
-    template.updated_at = datetime.utcnow()
-    db.commit()
-    
-    return {"message": "Template deleted successfully"}
-
-# Email list endpoints
-@app.post("/lists/", response_model=EmailListResponse)
-async def create_email_list(
-    email_list: EmailListCreate,
-    db: Session = Depends(get_db)
-):
-    """Create a new email list"""
-    from models import EmailList
-    
-    db_list = EmailList(
-        id=str(uuid.uuid4()),
-        name=email_list.name,
-        description=email_list.description,
-        created_at=datetime.utcnow()
-    )
-    db.add(db_list)
-    db.commit()
-    db.refresh(db_list)
-    return db_list
-
-@app.get("/lists/", response_model=List[EmailListResponse])
-async def get_email_lists(
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get all email lists"""
-    from models import EmailList
-    lists = db.query(EmailList).offset(skip).limit(limit).all()
-    return lists
-
-@app.get("/lists/{list_id}", response_model=EmailListResponse)
-async def get_email_list(
-    list_id: str,
-    db: Session = Depends(get_db)
-):
-    """Get a specific email list"""
-    from models import EmailList
-    email_list = db.query(EmailList).filter(EmailList.id == list_id).first()
-    if not email_list:
-        raise HTTPException(status_code=404, detail="Email list not found")
-    return email_list
-
-# Subscriber endpoints
-@app.post("/lists/{list_id}/subscribers/", response_model=EmailSubscriberResponse)
-async def add_subscriber(
-    list_id: str,
-    subscriber: EmailSubscriberCreate,
-    db: Session = Depends(get_db)
-):
-    """Add a subscriber to an email list"""
-    from models import EmailList, EmailSubscriber
-    
-    # Check if list exists
-    email_list = db.query(EmailList).filter(EmailList.id == list_id).first()
-    if not email_list:
-        raise HTTPException(status_code=404, detail="Email list not found")
-    
-    # Check if subscriber already exists
-    existing_subscriber = db.query(EmailSubscriber).filter(
-        EmailSubscriber.email_list_id == list_id,
-        EmailSubscriber.email == subscriber.email
-    ).first()
-    
-    if existing_subscriber:
-        if existing_subscriber.is_active:
-            raise HTTPException(
-                status_code=400, 
-                detail="Subscriber already exists in this list"
-            )
-        else:
-            # Reactivate existing subscriber
-            existing_subscriber.is_active = True
-            existing_subscriber.subscribed_at = datetime.utcnow()
-            existing_subscriber.unsubscribed_at = None
-            db.commit()
-            db.refresh(existing_subscriber)
-            return existing_subscriber
-    
-    # Create new subscriber
-    db_subscriber = EmailSubscriber(
-        id=str(uuid.uuid4()),
-        email_list_id=list_id,
-        email=subscriber.email,
-        first_name=subscriber.first_name,
-        last_name=subscriber.last_name,
-        subscribed_at=datetime.utcnow()
-    )
-    db.add(db_subscriber)
-    db.commit()
-    db.refresh(db_subscriber)
-    return db_subscriber
-
-@app.get("/lists/{list_id}/subscribers/", response_model=List[EmailSubscriberResponse])
-async def get_subscribers(
-    list_id: str,
-    active_only: bool = True,
-    skip: int = 0,
-    limit: int = 100,
-    db: Session = Depends(get_db)
-):
-    """Get subscribers from an email list"""
-    from models import EmailSubscriber
-    
-    query = db.query(EmailSubscriber).filter(
-        EmailSubscriber.email_list_id == list_id
-    )
-    
-    if active_only:
-        query = query.filter(EmailSubscriber.is_active == True)
-    
-    subscribers = query.offset(skip).limit(limit).all()
-    return subscribers
-
-@app.delete("/lists/{list_id}/subscribers/{subscriber_id}")
-async def unsubscribe(
-    list_id: str,
-    subscriber_id: str,
-    db: Session = Depends(get_db)
-):
-    """Unsubscribe a subscriber from an email list"""
-    from models import EmailSubscriber
-    
-    subscriber = db.query(EmailSubscriber).filter(
-        EmailSubscriber.id == subscriber_id,
-        EmailSubscriber.email_list_id == list_id
-    ).first()
-    
-    if not subscriber:
-        raise HTTPException(status_code=404, detail="Subscriber not found")
-    
-    subscriber.is_active = False
-    subscriber.unsubscribed_at = datetime.utcnow()
-    db.commit()
-    
-    return {"message": "Subscriber unsubscribed successfully"}
-
-# Unsubscribe endpoint for tracking links
-@app.get("/unsubscribe/{tracker_id}")
-async def unsubscribe_via_tracker(
-    tracker_id: str,
-    db: Session = Depends(get_db)
-):
-    """Unsubscribe via tracker ID"""
-    from models import EmailTracker, EmailSubscriber
-    
-    # Get tracker
-    tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()
-    if not tracker:
-        raise HTTPException(status_code=404, detail="Tracker not found")
-    
-    # Find and unsubscribe user
-    subscriber = db.query(EmailSubscriber).filter(
-        EmailSubscriber.email == tracker.recipient_email
-    ).first()
-    
-    if subscriber:
-        subscriber.is_active = False
-        subscriber.unsubscribed_at = datetime.utcnow()
-        db.commit()
-    
-    return {"message": "You have been unsubscribed successfully"}
-
-# Advanced analytics endpoints
-@app.get("/analytics/overview")
-async def get_analytics_overview(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    db: Session = Depends(get_db)
-):
-    """Get overall analytics overview"""
-    from .models import EmailTracker, EmailEvent
-    
-    # Parse dates
-    start_dt = datetime.fromisoformat(start_date) if start_date else datetime.utcnow() - timedelta(days=30)
-    end_dt = datetime.fromisoformat(end_date) if end_date else datetime.utcnow()
-    
-    # Get trackers in date range
-    trackers = db.query(EmailTracker).filter(
-        EmailTracker.created_at >= start_dt,
-        EmailTracker.created_at <= end_dt
-    ).all()
-    
-    # Calculate metrics
-    total_sent = len(trackers)
-    total_opens = sum(1 for t in trackers if t.opened_at)
-    total_clicks = sum(t.click_count for t in trackers)
-    
-    # Get events
-    events = db.query(EmailEvent).filter(
-        EmailEvent.timestamp >= start_dt,
-        EmailEvent.timestamp <= end_dt
-    ).all()
-    
-    # Group events by type
-    event_counts = {}
-    for event in events:
-        event_counts[event.event_type] = event_counts.get(event.event_type, 0) + 1
-    
+    Returns the current status of the EmailTracker API service.
+    Use this endpoint to monitor service availability.
+    """
     return {
-        "total_sent": total_sent,
-        "total_opens": total_opens,
-        "total_clicks": total_clicks,
-        "open_rate": round((total_opens / total_sent * 100) if total_sent > 0 else 0, 2),
-        "click_rate": round((total_clicks / total_sent * 100) if total_sent > 0 else 0, 2),
-        "event_counts": event_counts,
-        "date_range": {
-            "start": start_dt.isoformat(),
-            "end": end_dt.isoformat()
-        }
+        "status": "healthy",
+        "service": "EmailTracker API",
+        "version": settings.app_version,
+        "environment": "development" if settings.debug else "production",
+        "timestamp": time.time()
     }
 
-# Health check endpoint
-@app.get("/health")
-async def health_check(db: Session = Depends(get_db)):
-    """Health check endpoint"""
-    try:
-        # Test database connection
-        db.execute("SELECT 1")
-        return {
-            "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
-            "version": "1.0.0"
+@app.get("/", tags=["Health"])
+async def root():
+    """
+    API root endpoint
+    
+    Welcome message and basic API information.
+    """
+    return {
+        "message": "Welcome to EmailTracker API",
+        "version": settings.app_version,
+        "documentation": f"{settings.base_url}/docs",
+        "health": f"{settings.base_url}/health",
+        "openapi": f"{settings.base_url}/api/v1/openapi.json"
+    }
+
+# Custom documentation endpoints
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    """Custom Swagger UI with branding"""
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - Interactive API Documentation",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+        swagger_favicon_url="https://fastapi.tiangolo.com/img/favicon.png"
+    )
+
+@app.get("/redoc", include_in_schema=False)
+async def redoc_html():
+    """Custom ReDoc documentation"""
+    return get_redoc_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - API Documentation",
+        redoc_js_url="https://cdn.jsdelivr.net/npm/redoc@2.0.0/bundles/redoc.standalone.js",
+    )
+
+# Custom OpenAPI schema
+def custom_openapi():
+    """Generate custom OpenAPI schema with additional metadata"""
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Add custom security schemes
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "API Key",
+            "description": "Enter your API key in the format: your_api_key_here"
         }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.utcnow().isoformat()
+    }
+    
+    # Add global security requirement
+    openapi_schema["security"] = [{"BearerAuth": []}]
+    
+    # Add tags metadata
+    openapi_schema["tags"] = [
+        {
+            "name": "Health",
+            "description": "Service health and status endpoints"
+        },
+        {
+            "name": "Authentication",
+            "description": "API key management and authentication"
+        },
+        {
+            "name": "Email Sending",
+            "description": "Send single emails and bulk campaigns with tracking"
+        },
+        {
+            "name": "Tracking",
+            "description": "Email open and click tracking endpoints"
+        },
+        {
+            "name": "Analytics",
+            "description": "Email analytics, engagement metrics, and reporting"
+        },
+        {
+            "name": "Webhooks",
+            "description": "Real-time event notifications via webhooks"
         }
+    ]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# Global exception handler
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    """Custom HTTP exception handler with detailed error responses"""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.status_code,
+                "message": exc.detail,
+                "type": "http_exception",
+                "timestamp": time.time(),
+                "path": str(request.url.path)
+            }
+        }
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """Global exception handler for unexpected errors"""
+    logger.error(f"Unexpected error: {exc}", exc_info=True)
+    
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "code": 500,
+                "message": "Internal server error",
+                "type": "internal_error",
+                "timestamp": time.time(),
+                "path": str(request.url.path)
+            }
+        }
+    )
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8001,
+        reload=settings.debug,
+        log_level="info" if not settings.debug else "debug"
+    )
