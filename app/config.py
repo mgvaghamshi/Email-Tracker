@@ -5,22 +5,26 @@ import os
 import json
 from typing import Optional, List
 from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 class Settings(BaseModel):
     """Application settings with environment-specific configurations"""
     
     # Application Settings
-    app_name: str = "EmailTracker API"
-    app_version: str = "1.0.0"
+    app_name: str = os.getenv("APP_NAME", "EmailTracker API")
+    app_version: str = os.getenv("APP_VERSION", "1.0.0")
     app_description: str = "Professional email sending and tracking service - like Mailgun"
-    environment: str = "development"
-    debug: bool = True
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    debug: bool = os.getenv("DEBUG", "True").lower() == "true"
     
     # API Configuration
-    api_v1_prefix: str = "/api/v1"
-    base_url: str = "http://localhost:8001"
-    port: int = 8001
+    api_v1_prefix: str = os.getenv("API_V1_PREFIX", "/api/v1")
+    base_url: str = os.getenv("BASE_URL", "http://localhost:8001")
+    port: int = int(os.getenv("PORT", "8001"))
     
     # Database Configuration
     database_url: str = "sqlite:///./email_tracker.db"
@@ -28,21 +32,24 @@ class Settings(BaseModel):
     db_max_overflow: int = 10
     
     # Security Configuration
-    secret_key: str = "dev-secret-key-change-in-production"
+    secret_key: str = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    api_key: str = os.getenv("API_KEY", "emailtracker-api-key-dev")
     
     # SMTP Configuration
-    smtp_server: str = "smtp.gmail.com"
-    smtp_port: int = 587
-    smtp_username: str = ""
-    smtp_password: str = ""
-    smtp_use_tls: bool = True
+    smtp_server: str = os.getenv("SMTP_SERVER", "smtp.gmail.com")
+    smtp_port: int = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username: str = os.getenv("SMTP_USERNAME", "")
+    smtp_password: str = os.getenv("SMTP_PASSWORD", "")
+    smtp_use_tls: bool = os.getenv("SMTP_USE_TLS", "True").lower() == "true"
+    smtp_use_ssl: bool = os.getenv("SMTP_USE_SSL", "False").lower() == "true"
+    verify_ssl: bool = os.getenv("VERIFY_SSL", "True").lower() == "true"
     
     # Email Defaults
-    default_from_email: str = "noreply@example.com"
-    default_from_name: str = "EmailTracker"
-    sender_name: str = "EmailTracker"
+    default_from_email: str = os.getenv("DEFAULT_FROM_EMAIL", "noreply@example.com")
+    default_from_name: str = os.getenv("DEFAULT_FROM_NAME", "EmailTracker")
+    sender_name: str = os.getenv("SENDER_NAME", "EmailTracker")
     
     # Rate Limiting
     rate_limit_enabled: bool = True

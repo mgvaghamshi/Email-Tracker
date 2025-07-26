@@ -15,6 +15,7 @@ import certifi
 
 from ..database.models import EmailTracker
 from ..schemas.email import EmailSendRequest
+from ..config import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,13 +23,20 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     def __init__(self):
-        self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-        self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
-        self.smtp_username = os.getenv("SMTP_USERNAME")
-        self.smtp_password = os.getenv("SMTP_PASSWORD")
-        self.base_url = os.getenv("BASE_URL")
+        self.smtp_server = settings.smtp_server
+        self.smtp_port = settings.smtp_port
+        self.smtp_username = settings.smtp_username
+        self.smtp_password = settings.smtp_password.strip()  # Remove any whitespace
+        self.base_url = settings.base_url
+        self.smtp_use_tls = settings.smtp_use_tls
+        self.smtp_use_ssl = settings.smtp_use_ssl
         # SSL verification setting (set to False for development/testing if needed)
-        self.verify_ssl = os.getenv("VERIFY_SSL", "True").lower() == "true"
+        self.verify_ssl = settings.verify_ssl
+        
+        # Debug logging for configuration
+        logger.info(f"SMTP Config: server={self.smtp_server}, port={self.smtp_port}, "
+                   f"username={self.smtp_username}, use_tls={self.smtp_use_tls}, "
+                   f"use_ssl={self.smtp_use_ssl}, verify_ssl={self.verify_ssl}")
         
     def create_ssl_context(self):
         """Create SSL context with proper certificate handling"""
@@ -151,29 +159,59 @@ class EmailService:
             success = False
             last_error = None
 
-            # Try STARTTLS first
-            try:
-                with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as server:
-                    server.starttls(context=context)
-                    server.login(self.smtp_username, self.smtp_password)
-                    server.send_message(message)
-                    success = True
-                    logger.info(f"Email sent via STARTTLS to {email_request.to_email}")
-            except Exception as e:
-                last_error = e
-                logger.warning(f"STARTTLS attempt failed: {e}")
-
-            # Try direct SSL if STARTTLS failed
-            if not success:
+            # Use the configured SMTP method
+            if self.smtp_use_ssl and self.smtp_port == 465:
+                # Direct SSL connection (usually port 465)
                 try:
-                    with smtplib.SMTP_SSL(self.smtp_server, 465, context=context, timeout=10) as server:
+                    with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port, context=context, timeout=10) as server:
                         server.login(self.smtp_username, self.smtp_password)
                         server.send_message(message)
                         success = True
                         logger.info(f"Email sent via SSL to {email_request.to_email}")
                 except Exception as e:
                     last_error = e
-                    logger.warning(f"SSL attempt failed: {e}")
+                    logger.error(f"SSL attempt failed: {e}")
+            
+            elif self.smtp_use_tls and self.smtp_port == 587:
+                # STARTTLS connection (usually port 587)
+                try:
+                    with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as server:
+                        server.starttls(context=context)
+                        server.login(self.smtp_username, self.smtp_password)
+                        server.send_message(message)
+                        success = True
+                        logger.info(f"Email sent via STARTTLS to {email_request.to_email}")
+                except Exception as e:
+                    last_error = e
+                    logger.error(f"STARTTLS attempt failed: {e}")
+            
+            else:
+                # Fallback: try both methods
+                # Try STARTTLS first
+                try:
+                    with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=10) as server:
+                        if self.smtp_use_tls:
+                            server.starttls(context=context)
+                        server.login(self.smtp_username, self.smtp_password)
+                        server.send_message(message)
+                        success = True
+                        logger.info(f"Email sent via STARTTLS to {email_request.to_email}")
+                except Exception as e:
+                    last_error = e
+                    logger.warning(f"STARTTLS attempt failed: {e}")
+
+                # Try direct SSL if STARTTLS failed and SSL is enabled
+                if not success and self.smtp_use_ssl:
+                    try:
+                        ssl_port = 465 if self.smtp_port == 587 else self.smtp_port
+                        with smtplib.SMTP_SSL(self.smtp_server, ssl_port, context=context, timeout=10) as server:
+                            server.login(self.smtp_username, self.smtp_password)
+                            server.send_message(message)
+                            success = True
+                            logger.info(f"Email sent via SSL to {email_request.to_email}")
+                    except Exception as e:
+                        last_error = e
+                        logger.warning(f"SSL attempt failed: {e}")
 
             # Update tracker status in database
             if success:
