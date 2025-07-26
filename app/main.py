@@ -10,18 +10,20 @@ A comprehensive email infrastructure service similar to Mailgun, providing:
 - Webhook notifications
 """
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from contextlib import asynccontextmanager
+from sqlalchemy.orm import Session
 import logging
 import time
 from typing import Dict, Any
 
 from .config import settings
 from .database.connection import init_db
+from .dependencies import get_db
 from .api.v1 import auth, emails, tracking, analytics, webhooks
 
 # Configure logging
@@ -223,6 +225,18 @@ async def root():
         "health": f"{settings.base_url}/health",
         "openapi": f"{settings.base_url}/api/v1/openapi.json"
     }
+
+# Root-level unsubscribe endpoint for backward compatibility
+@app.get("/unsubscribe/{tracker_id}", include_in_schema=False)
+async def root_unsubscribe(tracker_id: str, db: Session = Depends(get_db)):
+    """
+    Root-level unsubscribe endpoint for backward compatibility
+    
+    This handles unsubscribe requests that come directly to /unsubscribe/{tracker_id}
+    instead of the full API path /api/v1/track/unsubscribe/{tracker_id}
+    """
+    from .api.v1.tracking import unsubscribe
+    return await unsubscribe(tracker_id, db)
 
 # Custom documentation endpoints
 @app.get("/docs", include_in_schema=False)
