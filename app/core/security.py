@@ -9,7 +9,10 @@ from typing import Optional, Tuple
 from sqlalchemy.orm import Session
 
 from ..database.connection import SessionLocal
-from ..database.models import ApiKey
+from ..database.user_models import ApiKey
+from .logging_config import get_logger
+
+logger = get_logger("core.security")
 
 
 def generate_api_key() -> Tuple[str, str]:
@@ -27,42 +30,44 @@ def generate_api_key() -> Tuple[str, str]:
 
 
 def hash_api_key(api_key: str) -> str:
-    """Hash an API key for secure storage"""
-    return hashlib.sha256(api_key.encode()).hexdigest()
+    """Hash an API key for secure storage using bcrypt"""
+    import bcrypt
+    return bcrypt.hashpw(api_key.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
 def verify_api_key(api_key: str) -> bool:
     """
-    Verify if an API key is valid and active
+    Verify if an API key is valid and active using the new user_models structure
     """
     if not api_key:
         return False
     
-    # Hash the provided key
-    api_key_hash = hash_api_key(api_key)
-    
-    # Check against database
+    # Check against database using the new ApiKey model
     db = SessionLocal()
     try:
-        api_key_record = db.query(ApiKey).filter(
-            ApiKey.key_hash == api_key_hash,
-            ApiKey.is_active == True
-        ).first()
+        # Get all active API keys and check against the raw key using bcrypt
+        api_key_records = db.query(ApiKey).filter(
+            ApiKey.is_active == True,
+            ApiKey.revoked == False
+        ).all()
         
-        if not api_key_record:
-            return False
+        for record in api_key_records:
+            if record.verify_key(api_key):
+                # Check if key has expired
+                if record.expires_at and record.expires_at < datetime.utcnow():
+                    return False
+                
+                # Update last used timestamp
+                record.last_used_at = datetime.utcnow()
+                record.usage_count = (record.usage_count or 0) + 1
+                db.commit()
+                
+                return True
         
-        # Check if key has expired
-        if api_key_record.expires_at and api_key_record.expires_at < datetime.utcnow():
-            return False
+        return False
         
-        # Update last used timestamp
-        api_key_record.last_used_at = datetime.utcnow()
-        db.commit()
-        
-        return True
-        
-    except Exception:
+    except Exception as e:
+        logger.error(f"Error verifying API key: {e}")
         return False
     finally:
         db.close()
@@ -70,19 +75,27 @@ def verify_api_key(api_key: str) -> bool:
 
 def get_api_key_info(api_key: str) -> Optional[ApiKey]:
     """
-    Get API key information
+    Get API key information using the new user_models structure
     """
     if not api_key:
         return None
     
-    api_key_hash = hash_api_key(api_key)
-    
     db = SessionLocal()
     try:
-        return db.query(ApiKey).filter(
-            ApiKey.key_hash == api_key_hash,
-            ApiKey.is_active == True
-        ).first()
+        # Get all active API keys and check against the raw key using bcrypt
+        api_key_records = db.query(ApiKey).filter(
+            ApiKey.is_active == True,
+            ApiKey.revoked == False
+        ).all()
+        
+        for record in api_key_records:
+            if record.verify_key(api_key):
+                return record
+        
+        return None
+    except Exception as e:
+        logger.error(f"Error getting API key info: {e}")
+        return None
     finally:
         db.close()
 
@@ -107,12 +120,13 @@ def create_api_key(
     db = SessionLocal()
     try:
         api_key_record = ApiKey(
-            key_hash=api_key_hash,
+            hashed_key=api_key_hash,
             name=name,
             user_id=user_id,
             requests_per_minute=requests_per_minute,
             requests_per_day=requests_per_day,
-            expires_at=expires_at
+            expires_at=expires_at,
+            prefix=api_key[:12]  # Store first 12 chars as prefix for identification
         )
         
         db.add(api_key_record)

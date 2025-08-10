@@ -10,9 +10,10 @@ A comprehensive email infrastructure service similar to Mailgun, providing:
 - Webhook notifications
 """
 
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from typing import Optional
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 from fastapi.openapi.utils import get_openapi
 from contextlib import asynccontextmanager
@@ -24,14 +25,14 @@ from typing import Dict, Any
 from .config import settings
 from .database.connection import init_db
 from .dependencies import get_db
-from .api.v1 import auth, emails, tracking, analytics, webhooks
+from .core.usage_middleware import track_api_usage_middleware, track_api_response
+from .core.logging_config import setup_logging, get_logger
+from .api.v1 import auth, emails, tracking, webhooks, campaigns, contacts, templates, users, admin, premium_features, analytics_dashboard
+from .api.v1 import settings as settings_router
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+setup_logging()
+logger = get_logger("main")
 
 
 @asynccontextmanager
@@ -50,9 +51,24 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Database initialization failed: {e}")
         raise
     
+    # Start campaign scheduler
+    try:
+        from .services.scheduler import start_scheduler
+        await start_scheduler()
+        logger.info("✅ Campaign scheduler started successfully")
+    except Exception as e:
+        logger.error(f"❌ Campaign scheduler failed to start: {e}")
+    
     yield
     
     # Shutdown
+    try:
+        from .services.scheduler import stop_scheduler
+        await stop_scheduler()
+        logger.info("✅ Campaign scheduler stopped")
+    except Exception as e:
+        logger.error(f"❌ Error stopping campaign scheduler: {e}")
+    
     logger.info("📴 EmailTracker API shutdown complete")
 
 
@@ -145,11 +161,7 @@ Need help? Contact our support team:
     servers=[
         {
             "url": settings.base_url,
-            "description": "Production server"
-        },
-        {
-            "url": "http://localhost:8001",
-            "description": "Development server"
+            "description": "ColdEdge Email Service API"
         }
     ]
 )
@@ -163,36 +175,122 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Custom middleware for request logging and timing
+# Custom middleware for request logging, timing, and API usage tracking
 @app.middleware("http")
-async def log_requests(request: Request, call_next):
-    """Log all requests with timing information"""
+async def log_requests_and_track_usage(request: Request, call_next):
+    """Log all requests with timing information and track API usage"""
     start_time = time.time()
     
-    # Log request
-    logger.info(f"🔄 {request.method} {request.url.path} - Client: {request.client.host if request.client else 'unknown'}")
+    # Get database session for usage tracking
+    db_generator = get_db()
+    db = next(db_generator)
     
-    # Process request
-    response = await call_next(request)
-    
-    # Calculate duration
-    duration = time.time() - start_time
-    
-    # Log response
-    status_emoji = "✅" if response.status_code < 400 else "❌"
-    logger.info(f"{status_emoji} {request.method} {request.url.path} - {response.status_code} - {duration:.3f}s")
-    
-    # Add timing header
-    response.headers["X-Process-Time"] = str(duration)
-    
-    return response
+    try:
+        # Log request
+        logger.info(f"🔄 {request.method} {request.url.path} - Client: {request.client.host if request.client else 'unknown'}")
+        
+        # Skip API usage tracking for frontend, auth, and public routes
+        skip_tracking_paths = [
+            "/api/v1/auth/",
+            "/api/v1/users/",
+            "/api/v1/templates/system",  # Public system templates
+            "/api/usage",  # Frontend rate limit check endpoint
+            "/auth/",
+            "/login", 
+            "/register",
+            "/health",
+            "/docs",
+            "/openapi.json",
+            "/redoc",
+            "/favicon.ico",
+            "/static/",
+            "/",  # Root endpoint
+        ]
+        
+        # Only track API usage for actual API endpoints with potential API keys
+        should_track = not any(request.url.path.startswith(path) for path in skip_tracking_paths)
+        
+        if should_track:
+            # Track API usage (rate limiting and validation) only for API endpoints
+            await track_api_usage_middleware(request, db)
+        
+        # Process request
+        response = await call_next(request)
+        
+        # Track the response only if we tracked the request
+        if should_track:
+            track_api_response(request, response.status_code, response, db)
+        
+        # Calculate duration
+        duration = time.time() - start_time
+        
+        # Log response
+        status_emoji = "✅" if response.status_code < 400 else "❌"
+        logger.info(f"{status_emoji} {request.method} {request.url.path} - {response.status_code} - {duration:.3f}s")
+        
+        # Add timing header
+        response.headers["X-Process-Time"] = str(duration)
+        
+        return response
+        
+    except HTTPException as e:
+        # Handle rate limiting and other HTTP exceptions
+        duration = time.time() - start_time
+        logger.warning(f"⚠️ {request.method} {request.url.path} - {e.status_code} - {duration:.3f}s - {e.detail}")
+        
+        # For rate limit responses, create a proper response with headers
+        if e.status_code == 429:
+            from fastapi.responses import JSONResponse
+            
+            # Start with exception headers if available
+            headers = {}
+            if hasattr(e, 'headers') and e.headers:
+                headers.update(e.headers)
+            
+            # Add additional rate limit headers if available from request state
+            if hasattr(request.state, 'rate_limit_headers'):
+                headers.update(request.state.rate_limit_headers)
+            
+            # Add timing header
+            headers["X-Process-Time"] = str(duration)
+            
+            return JSONResponse(
+                status_code=429,
+                content=e.detail,
+                headers=headers
+            )
+        
+        raise e
+    finally:
+        # Close database session
+        try:
+            next(db_generator)
+        except StopIteration:
+            pass
 
 # Include API routers
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
+app.include_router(users.router, prefix=settings.api_v1_prefix)
+app.include_router(admin.router, prefix=settings.api_v1_prefix)
+
+# Core API endpoints
 app.include_router(emails.router, prefix=settings.api_v1_prefix)
+app.include_router(campaigns.router, prefix=settings.api_v1_prefix)
+
+# Premium features for SaaS dashboard
+try:
+    app.include_router(premium_features.router, prefix=settings.api_v1_prefix, tags=["Premium Features"])
+    logger.info("✅ Premium features endpoints loaded successfully")
+except ImportError as e:
+    logger.warning(f"⚠️ Premium features not available: {e}")
+
+# Load standard endpoints
 app.include_router(tracking.router, prefix=settings.api_v1_prefix)
-app.include_router(analytics.router, prefix=settings.api_v1_prefix)
+app.include_router(analytics_dashboard.router, prefix=settings.api_v1_prefix)
 app.include_router(webhooks.router, prefix=settings.api_v1_prefix)
+app.include_router(contacts.router, prefix=settings.api_v1_prefix)
+app.include_router(templates.router, prefix=settings.api_v1_prefix)
+app.include_router(settings_router.router, prefix=settings.api_v1_prefix)
 
 # Health check endpoints
 @app.get("/health", tags=["Health"])
@@ -209,6 +307,89 @@ async def health_check():
         "version": settings.app_version,
         "environment": "development" if settings.debug else "production",
         "timestamp": time.time()
+    }
+
+@app.get("/api/usage", tags=["Usage"], include_in_schema=False)
+async def get_usage_status():
+    """
+    Frontend usage status endpoint
+    
+    Returns rate limit usage information for the frontend.
+    This endpoint is used by the frontend to check rate limit status.
+    """
+    # Return mock data for now - in production this would check user's actual usage
+    return {
+        "limit": 1000,
+        "remaining": 950,
+        "resetTime": int(time.time() + 3600),  # Reset in 1 hour
+        "used": 50,
+        "percentage": 5.0
+    }
+
+@app.get("/api/test/templates", tags=["Test"], include_in_schema=False)
+async def test_templates(db: Session = Depends(get_db)):
+    """
+    Test endpoint to check templates without authentication
+    """
+    from .database.models import Template
+    templates = db.query(Template).all()
+    return {
+        "total": len(templates),
+        "templates": [
+            {
+                "id": t.id,
+                "name": t.name,
+                "status": t.status,
+                "user_id": t.user_id
+            } for t in templates
+        ]
+    }
+
+@app.get("/api/test/contacts", tags=["Test"], include_in_schema=False)
+async def test_contacts(db: Session = Depends(get_db)):
+    """
+    Test endpoint to check contacts without authentication
+    """
+    from .database.models import Contact
+    contacts = db.query(Contact).all()
+    return {
+        "total": len(contacts),
+        "contacts": [
+            {
+                "id": c.id,
+                "email": c.email,
+                "first_name": c.first_name,
+                "last_name": c.last_name,
+                "status": c.status,
+                "user_id": c.user_id
+            } for c in contacts
+        ]
+    }
+
+@app.get("/api/test/campaigns", tags=["Test"], include_in_schema=False)
+async def test_campaigns(db: Session = Depends(get_db)):
+    """
+    Test endpoint to check campaigns without authentication
+    """
+    from .database.models import Campaign
+    campaigns = db.query(Campaign).all()
+    return {
+        "total": len(campaigns),
+        "campaigns": [
+            {
+                "id": c.id,
+                "name": c.name,
+                "status": c.status,
+                "user_id": c.user_id,
+                "subject": c.subject,
+                "description": c.description,
+                "recipients_count": 0,
+                "sent_count": 0,
+                "open_rate": 0.0,
+                "click_rate": 0.0,
+                "created_at": c.created_at.isoformat() if c.created_at else None
+            } for c in campaigns
+        ]
     }
 
 @app.get("/", tags=["Health"])

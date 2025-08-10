@@ -25,7 +25,7 @@ class EmailSendRequest(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "to_email": "user@example.com",
                 "from_email": "sender@company.com",
@@ -56,7 +56,7 @@ class BulkEmailSendRequest(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "recipients": ["user1@example.com", "user2@example.com"],
                 "from_email": "sender@company.com",
@@ -78,7 +78,7 @@ class EmailSendResponse(BaseModel):
     error: Optional[str] = Field(None, description="Error message if failed")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "success": True,
                 "message": "Email queued successfully for user@example.com",
@@ -118,7 +118,7 @@ class EmailTrackerResponse(BaseModel):
     
     class Config:
         from_attributes = True
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "550e8400-e29b-41d4-a716-446655440000",
                 "campaign_id": "campaign_550e8400-e29b-41d4-a716-446655440001",

@@ -290,65 +290,6 @@ async def retry_webhook_event(
         )
 
 
-@router.post("/test")
-async def test_webhook_endpoint(
-    webhook_url: str,
-    secret: str = None,
-    background_tasks: BackgroundTasks = BackgroundTasks(),
-    api_key: str = Depends(get_api_key)
-):
-    """
-    Test a webhook endpoint
-    
-    Send a test webhook event to verify your endpoint is working correctly.
-    
-    **Request Body:**
-    - **webhook_url**: The URL to test
-    - **secret**: Optional secret for signature verification
-    
-    **Example Usage:**
-    ```bash
-    curl -X POST "https://api.emailtracker.com/api/v1/webhooks/test" \\
-         -H "Authorization: Bearer your_api_key" \\
-         -H "Content-Type: application/json" \\
-         -d '{
-           "webhook_url": "https://yourapp.com/webhooks/email",
-           "secret": "your_webhook_secret"
-         }'
-    ```
-    """
-    try:
-        # Create test payload
-        test_payload = {
-            "event_type": "webhook.test",
-            "timestamp": datetime.utcnow().isoformat(),
-            "test": True,
-            "message": "This is a test webhook from EmailTracker API"
-        }
-        
-        # Queue for delivery
-        background_tasks.add_task(
-            deliver_webhook,
-            f"test_{datetime.utcnow().timestamp()}",
-            webhook_url,
-            "webhook.test",
-            test_payload,
-            secret
-        )
-        
-        return {
-            "success": True,
-            "message": "Test webhook queued for delivery",
-            "test_payload": test_payload
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to send test webhook: {str(e)}"
-        )
-
-
 # Background task for webhook delivery
 async def deliver_webhook(
     event_id: str,

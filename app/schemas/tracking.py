@@ -24,7 +24,7 @@ class EmailEventResponse(BaseModel):
     
     class Config:
         from_attributes = True
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "event_550e8400-e29b-41d4-a716-446655440000",
                 "tracker_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -55,7 +55,7 @@ class EmailClickResponse(BaseModel):
     
     class Config:
         from_attributes = True
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "click_550e8400-e29b-41d4-a716-446655440000",
                 "tracker_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -80,7 +80,7 @@ class EmailBounceResponse(BaseModel):
     
     class Config:
         from_attributes = True
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "bounce_550e8400-e29b-41d4-a716-446655440000",
                 "tracker_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -100,7 +100,7 @@ class TrackingPixelResponse(BaseModel):
     is_valid: bool = Field(..., description="Whether tracker exists")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "tracker_id": "550e8400-e29b-41d4-a716-446655440000",
                 "pixel_url": "https://api.emailtracker.com/track/open/550e8400-e29b-41d4-a716-446655440000",
@@ -118,7 +118,7 @@ class BotDetectionResponse(BaseModel):
     confidence: float = Field(..., ge=0, le=1, description="Confidence score (0-1)")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "ip_address": "192.168.1.1",

@@ -13,7 +13,7 @@ from ...dependencies import get_db, get_optional_api_key
 from ...database.models import EmailTracker, EmailEvent, EmailClick
 from ...schemas.tracking import (
     EmailEventResponse, EmailClickResponse, 
-    TrackingPixelResponse, BotDetectionResponse
+    TrackingPixelResponse
 )
 from ...services.tracking_service import TrackingService
 
@@ -297,52 +297,6 @@ async def get_tracking_pixel_info(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to get tracking pixel info: {str(e)}"
-        )
-
-
-@router.get("/debug/bot-detection", response_model=BotDetectionResponse)
-async def debug_bot_detection(
-    request: Request,
-    user_agent: Optional[str] = None
-) -> BotDetectionResponse:
-    """
-    Debug bot detection algorithm
-    
-    Test the bot detection algorithm with a specific user agent string
-    or your current browser's user agent. Useful for testing and debugging.
-    
-    **Query Parameters:**
-    - **user_agent**: Optional user agent string to test (uses your browser's if not provided)
-    
-    **Example Usage:**
-    ```bash
-    # Test your current browser
-    curl "https://api.emailtracker.com/api/v1/track/debug/bot-detection"
-    
-    # Test a specific user agent
-    curl "https://api.emailtracker.com/api/v1/track/debug/bot-detection?user_agent=Googlebot/2.1"
-    ```
-    """
-    try:
-        # Use provided user agent or get from request
-        test_user_agent = user_agent or request.headers.get("user-agent", "")
-        ip_address = request.client.host if request.client else None
-        
-        # Use tracking service for bot detection
-        is_bot, bot_reason, confidence = tracking_service.detect_bot(test_user_agent, ip_address)
-        
-        return BotDetectionResponse(
-            user_agent=test_user_agent,
-            ip_address=ip_address,
-            is_bot=is_bot,
-            bot_reason=bot_reason,
-            confidence=confidence
-        )
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to analyze bot detection: {str(e)}"
         )
 
 

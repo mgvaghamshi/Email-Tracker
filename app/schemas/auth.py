@@ -24,7 +24,7 @@ class ApiKeyCreateRequest(BaseModel):
         return v
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "Production API Key",
                 "user_id": "user_123",
@@ -50,7 +50,7 @@ class ApiKeyResponse(BaseModel):
     
     class Config:
         from_attributes = True
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "id": "ak_550e8400-e29b-41d4-a716-446655440000",
                 "key": "et_abc123def456...",
@@ -90,7 +90,7 @@ class ApiKeyUpdateRequest(BaseModel):
     requests_per_day: Optional[int] = Field(None, ge=1, le=1000000, description="New rate limit: requests per day")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "name": "Updated API Key Name",
                 "is_active": True,
@@ -111,7 +111,7 @@ class ApiKeyUsageStats(BaseModel):
     remaining_day: int = Field(..., description="Remaining requests today")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "api_key_id": "ak_550e8400-e29b-41d4-a716-446655440000",
                 "current_minute_requests": 15,

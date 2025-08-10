@@ -34,7 +34,7 @@ class EmailAnalytics(BaseModel):
     last_sent_at: Optional[datetime] = Field(None, description="Last email sent time")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "campaign_id": "campaign_550e8400-e29b-41d4-a716-446655440001",
                 "total_sent": 1000,
@@ -75,7 +75,7 @@ class DeliverabilityStats(BaseModel):
     period_end: Optional[datetime] = Field(None, description="End of reporting period")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "total_sent": 50000,
                 "delivered": 48500,
@@ -111,7 +111,7 @@ class EngagementAnalytics(BaseModel):
     clicks_by_country: Dict[str, int] = Field(..., description="Clicks by country")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "campaign_id": "campaign_550e8400-e29b-41d4-a716-446655440001",
                 "opens_by_hour": [
@@ -139,7 +139,7 @@ class TopPerformingLinks(BaseModel):
     total_clicks: int = Field(..., description="Total clicks across all links")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "campaign_id": "campaign_550e8400-e29b-41d4-a716-446655440001",
                 "links": [
