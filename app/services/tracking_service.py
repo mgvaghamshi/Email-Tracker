@@ -16,13 +16,19 @@ class TrackingService:
     """Service for handling email tracking events"""
     
     def __init__(self):
-        # Bot detection keywords (conservative approach)
+        # Bot detection keywords (conservative approach - only obvious bots)
         self.bot_keywords = [
             'googlebot', 'bingbot', 'slurp', 'duckduckbot', 'baiduspider',
-            'yandexbot', 'facebookexternalhit', 'twitterbot', 'linkedinbot',
-            'crawler', 'spider', 'scraper', 'headless',
+            'yandexbot', 'crawler', 'spider', 'scraper',
             'phantom', 'selenium', 'webdriver', 'automation',
-            'curl/', 'wget/', 'python-requests/', 'postman'
+            'curl/', 'wget/', 'python-requests/', 'postman',
+            'bot/', 'crawler/', 'spider/'
+        ]
+        
+        # Legitimate email client prefetch patterns (don't mark as bots)
+        self.legitimate_prefetch = [
+            'outlook', 'thunderbird', 'apple mail', 'gmail', 'yahoo',
+            'mozilla', 'safari', 'chrome', 'edge', 'firefox'
         ]
     
     def detect_bot(self, user_agent: str, ip_address: Optional[str] = None) -> Tuple[bool, Optional[str], float]:
@@ -37,19 +43,26 @@ class TrackingService:
         
         user_agent_lower = user_agent.lower()
         
+        # First check if it's a legitimate email client (don't mark as bot)
+        for client in self.legitimate_prefetch:
+            if client in user_agent_lower:
+                return False, None, 0.95
+        
         # Check for obvious bot keywords
         for keyword in self.bot_keywords:
             if keyword in user_agent_lower:
                 return True, f"bot_keyword: {keyword}", 0.95
         
-        # Check for suspicious patterns
-        if len(user_agent) < 10:
+        # Check for suspicious patterns (but be less aggressive)
+        if len(user_agent) < 5:
             return True, "suspiciously_short_user_agent", 0.8
+            
+        # Don't filter based on length alone if it contains browser indicators
+        browser_indicators = ['mozilla', 'webkit', 'gecko', 'chrome', 'safari', 'firefox', 'edge']
+        has_browser_indicator = any(indicator in user_agent_lower for indicator in browser_indicators)
         
-        # More sophisticated checks could be added here:
-        # - IP reputation checking
-        # - Request frequency analysis
-        # - Behavioral patterns
+        if has_browser_indicator:
+            return False, None, 0.95
         
         return False, None, 0.95
     
@@ -75,18 +88,20 @@ class TrackingService:
             # Bot detection
             is_bot, bot_reason, confidence = self.detect_bot(user_agent, ip_address)
             
-            # Check for recent duplicate from same IP (within 3 seconds)
+            # Check for recent duplicate from same IP (within 10 seconds) 
+            # But allow different user agents (different email clients)
             if not is_bot and ip_address:
-                recent_threshold = datetime.utcnow() - timedelta(seconds=3)
+                recent_threshold = datetime.utcnow() - timedelta(seconds=10)
                 recent_event = db.query(EmailEvent).filter(
                     EmailEvent.tracker_id == tracker_id,
                     EmailEvent.event_type == "open",
                     EmailEvent.timestamp > recent_threshold,
-                    EmailEvent.ip_address == ip_address
+                    EmailEvent.ip_address == ip_address,
+                    EmailEvent.user_agent == user_agent  # Same IP AND same user agent
                 ).first()
                 
                 if recent_event:
-                    logger.info(f"🔄 DUPLICATE FILTERED: {tracker_id} | Recent open within 3 seconds | IP: {ip_address}")
+                    logger.info(f"🔄 DUPLICATE FILTERED: {tracker_id} | Same IP+UA within 10s | IP: {ip_address}")
                     return False
             
             # Decide whether to track

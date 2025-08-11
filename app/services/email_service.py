@@ -7,6 +7,7 @@ from email.utils import formataddr
 from email import encoders
 import re
 import os
+import uuid
 from typing import Optional
 import logging
 from datetime import datetime
@@ -237,7 +238,49 @@ class EmailService:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send email to {email_request.to_email}: {str(e)}")
+            error_str = str(e).lower()
+            logger.error(f"Failed to send email to {email_request.to_email}: {error_str}")
+            
+            # Check if this is a bounce (permanent failure)
+            bounce_indicators = [
+                'mailbox unavailable', 'user unknown', 'invalid recipient',
+                'address not found', 'recipient rejected', 'mailbox not found',
+                'no such user', 'user not found', 'invalid address',
+                'delivery to the following recipient failed permanently'
+            ]
+            
+            is_bounce = any(indicator in error_str for indicator in bounce_indicators)
+            
+            if is_bounce:
+                # This is likely a hard bounce, record it
+                try:
+                    from ..database.connection import SessionLocal
+                    from ..database.models import EmailTracker, EmailBounce
+                    
+                    db = SessionLocal()
+                    try:
+                        tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()
+                        if tracker:
+                            tracker.bounced = True
+                            tracker.bounce_reason = str(e)[:500]  # Limit length
+                            tracker.updated_at = datetime.utcnow()
+                            
+                            # Create bounce record
+                            bounce = EmailBounce(
+                                id=str(uuid.uuid4()),
+                                tracker_id=tracker_id,
+                                bounce_type="hard",
+                                reason=str(e)[:500],
+                                timestamp=datetime.utcnow()
+                            )
+                            db.add(bounce)
+                            db.commit()
+                            logger.info(f"Recorded hard bounce for {email_request.to_email}")
+                    finally:
+                        db.close()
+                except Exception as db_error:
+                    logger.error(f"Failed to record bounce: {db_error}")
+            
             return False
     
     def validate_email(self, email: str) -> bool:

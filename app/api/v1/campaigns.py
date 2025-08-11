@@ -681,6 +681,10 @@ async def send_campaign(
                 <div style="white-space: pre-line;">{campaign_description}</div>
             </div>
             
+            <div class="cta">
+                <a href="https://example.com/learn-more" style="background: #007bff; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Learn More</a>
+            </div>
+            
             <p>Thank you for being part of our community. We appreciate your continued support.</p>
             
             <p style="margin-top: 30px;">
@@ -801,9 +805,19 @@ Unsubscribe: {{{{unsubscribe_url}}}}
             success = await email_service.send_email(email_request, tracker_id, tracking_pixel_url)
             
             if success:
+                # Mark as delivered
+                tracker.delivered = True
+                tracker.delivered_at = datetime.now()
+                db.commit()
+                
                 sent_count += 1
                 print(f"✅ Email sent successfully to {contact.email}")
             else:
+                # Mark as failed
+                tracker.delivered = False
+                tracker.failed_at = datetime.now()
+                db.commit()
+                
                 failed_count += 1
                 print(f"❌ Failed to send email to {contact.email}")
                 
