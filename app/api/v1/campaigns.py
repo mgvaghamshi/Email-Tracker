@@ -722,7 +722,7 @@ Unsubscribe: {{{{unsubscribe_url}}}}
             
             # Create tracking ID
             tracker_id = str(uuid.uuid4())
-            tracking_pixel_url = f"{email_service.base_url}/track/{tracker_id}"
+            tracking_pixel_url = f"{email_service.base_url}/api/v1/track/open/{tracker_id}"
             
             # Personalize content with recipient-specific data
             first_name = contact.first_name or "there"
@@ -733,7 +733,7 @@ Unsubscribe: {{{{unsubscribe_url}}}}
                 '{{company_name}}': company_name,
                 '{{campaign_name}}': campaign.name,
                 '{{campaign_description}}': campaign.description or "",
-                '{{unsubscribe_url}}': f"{base_url}/unsubscribe/{tracker_id}",
+                '{{unsubscribe_url}}': f"{base_url}/api/v1/unsubscribe/{tracker_id}",
                 '{{company_email}}': company_email,
                 '{{year}}': str(datetime.now().year),
                 '{{tracker_id}}': tracker_id
@@ -756,7 +756,7 @@ Unsubscribe: {{{{unsubscribe_url}}}}
                     if original_url.startswith('#') or 'unsubscribe' in original_url:
                         return f'href="{original_url}"'
                     # Create tracked URL
-                    tracked_url = f"{base_url}/track/click/{tracker_id}?url={original_url}"
+                    tracked_url = f"{base_url}/api/v1/track/click/{tracker_id}?url={original_url}"
                     return f'href="{tracked_url}"'
                 
                 return re.sub(r'href="([^"]*)"', track_link, html_content)

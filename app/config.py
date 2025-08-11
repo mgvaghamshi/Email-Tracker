@@ -30,6 +30,13 @@ class Settings(BaseModel):
     base_url: str = os.getenv("BASE_URL", "http://localhost:8001")
     port: int = int(os.getenv("PORT", "8001"))
     
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._load_from_environment()
+        # Auto-detect Render deployment
+        if os.getenv("RENDER"):
+            self.base_url = f"https://{os.getenv('RENDER_EXTERNAL_HOSTNAME', 'email-tracker-mh76.onrender.com')}"
+    
     # Database Configuration
     database_url: str = "sqlite:///./email_tracker.db"
     db_pool_size: int = 5
