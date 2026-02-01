@@ -907,6 +907,35 @@ async def get_analytics_overview(
         }
     }
 
+# Rate limit / Usage endpoint
+@app.get("/api/usage")
+async def get_usage(db: Session = Depends(get_db)):
+    """Get current API usage/rate limit information"""
+    try:
+        # Get count of campaigns
+        campaign_count = db.query(EmailCampaign).count()
+        # Get count of tracked emails
+        tracker_count = db.query(EmailTracker).count()
+        # Get count of events
+        event_count = db.query(EmailEvent).count()
+        
+        return {
+            "limit": 10000,
+            "remaining": max(0, 10000 - (tracker_count + event_count)),
+            "resetTime": int((datetime.utcnow() + timedelta(days=1)).timestamp()),
+            "used": tracker_count + event_count,
+            "percentage": round(((tracker_count + event_count) / 10000) * 100, 2)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching usage: {str(e)}")
+        return {
+            "limit": 10000,
+            "remaining": 10000,
+            "resetTime": int((datetime.utcnow() + timedelta(days=1)).timestamp()),
+            "used": 0,
+            "percentage": 0
+        }
+
 # Health check endpoint
 @app.get("/health")
 async def health_check(db: Session = Depends(get_db)):
