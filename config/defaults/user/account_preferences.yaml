@@ -1,0 +1,203 @@
+# User-Level Account Preferences
+# Default personal settings for new users
+
+personal_information:
+  # Profile defaults
+  timezone: "UTC"
+  language: "en"
+  locale: "en_US"
+  date_format: "MM/DD/YYYY"
+  time_format: "12h"  # 12h or 24h
+  
+  # Contact preferences
+  phone_number: ""
+  job_title: ""
+  department: ""
+  company_size: ""
+
+dashboard_preferences:
+  # Dashboard layout
+  layout_style: "standard"  # standard, compact, detailed
+  sidebar_collapsed: false
+  theme: "light"  # light, dark, auto
+  
+  # Widget configuration
+  show_welcome_message: true
+  show_quick_stats: true
+  show_recent_activity: true
+  show_performance_overview: true
+  show_upcoming_campaigns: true
+  
+  # Data display
+  default_date_range: "30d"  # 7d, 30d, 90d, 1y
+  auto_refresh_dashboard: true
+  refresh_interval_seconds: 300
+  
+  # Chart preferences
+  preferred_chart_type: "line"  # line, bar, area, pie
+  show_data_labels: true
+  animate_charts: true
+  color_blind_friendly: false
+
+notification_preferences:
+  # Email notifications
+  email_notifications_enabled: true
+  digest_frequency: "weekly"  # daily, weekly, monthly, never
+  
+  # Campaign notifications
+  campaign_sent_notification: true
+  campaign_completed_notification: true
+  campaign_failed_notification: true
+  
+  # Performance alerts
+  high_bounce_rate_alert: true
+  low_open_rate_alert: false
+  spam_complaint_alert: true
+  
+  # System notifications
+  security_alerts: true
+  account_changes: true
+  billing_notifications: true
+  feature_updates: false
+  maintenance_notifications: true
+  
+  # Real-time notifications
+  browser_notifications: false
+  desktop_notifications: false
+  mobile_push_notifications: false
+
+workspace_preferences:
+  # Editor preferences
+  code_editor_theme: "vs-light"  # vs-light, vs-dark, high-contrast
+  editor_font_size: 14
+  editor_font_family: "Monaco, Consolas, monospace"
+  editor_word_wrap: true
+  editor_minimap: true
+  
+  # Campaign builder
+  default_template: ""
+  auto_save_frequency: 30  # seconds
+  show_preview_pane: true
+  preview_device: "desktop"  # desktop, mobile, both
+  
+  # Table preferences
+  items_per_page: 25  # 10, 25, 50, 100
+  table_density: "standard"  # compact, standard, comfortable
+  show_row_numbers: false
+
+privacy_settings:
+  # Data sharing
+  allow_analytics_tracking: true
+  allow_usage_data_collection: true
+  allow_feature_suggestions: true
+  
+  # Profile visibility
+  profile_public: false
+  show_last_login: false
+  show_activity_status: false
+  
+  # Communication
+  allow_marketing_emails: false
+  allow_product_updates: true
+  allow_survey_invitations: false
+
+accessibility:
+  # Visual accessibility
+  high_contrast_mode: false
+  large_text_mode: false
+  reduce_animations: false
+  focus_indicators: true
+  
+  # Keyboard navigation
+  keyboard_shortcuts_enabled: true
+  tab_navigation_enhanced: false
+  screen_reader_optimized: false
+  
+  # Audio/Visual
+  sound_notifications: false
+  visual_notifications: true
+  notification_duration: 5  # seconds
+
+security_preferences:
+  # Authentication
+  require_2fa: false
+  preferred_2fa_method: "totp"  # totp, sms, email
+  backup_codes_generated: false
+  
+  # Session management
+  logout_on_close: false
+  session_timeout_warning: true
+  concurrent_session_limit: 5
+  
+  # Login security
+  login_notifications: true
+  suspicious_activity_alerts: true
+  new_device_notifications: true
+  
+  # API security
+  api_key_notifications: true
+  webhook_security_headers: true
+
+productivity_settings:
+  # Automation preferences
+  auto_save_drafts: true
+  auto_save_interval: 30  # seconds
+  confirm_destructive_actions: true
+  
+  # Quick actions
+  enable_keyboard_shortcuts: true
+  show_keyboard_shortcut_hints: true
+  enable_bulk_actions: true
+  
+  # Workflow preferences
+  default_campaign_type: "standard"
+  default_send_time: "09:00"
+  default_timezone_for_scheduling: "user_timezone"  # user_timezone, account_timezone
+  
+  # Templates and content
+  favorite_templates: []
+  recently_used_templates: []
+  auto_generate_preview_text: true
+
+integration_preferences:
+  # External integrations
+  zapier_enabled: false
+  webhook_notifications: false
+  api_usage_notifications: true
+  
+  # Calendar integration
+  calendar_provider: ""  # google, outlook, apple
+  show_campaign_schedule: false
+  sync_deadlines: false
+  
+  # CRM integration
+  crm_provider: ""  # salesforce, hubspot, pipedrive
+  auto_sync_contacts: false
+  sync_campaign_results: false
+
+help_and_support:
+  # Help preferences
+  show_tooltips: true
+  show_feature_hints: true
+  show_onboarding_tips: true
+  
+  # Support options
+  preferred_contact_method: "email"  # email, chat, phone
+  support_language: "en"
+  timezone_for_support: "user_timezone"
+  
+  # Documentation
+  show_help_sidebar: false
+  auto_open_help_articles: false
+  track_help_article_views: true
+
+experimental_features:
+  # Beta features
+  beta_features_enabled: false
+  early_access_program: false
+  feedback_collection: true
+  
+  # Feature flags
+  new_dashboard_layout: false
+  advanced_segmentation: false
+  ai_content_suggestions: false

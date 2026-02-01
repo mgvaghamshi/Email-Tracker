@@ -1,0 +1,199 @@
+# Tenant-Level Branding Defaults
+# Default branding and customization settings for new tenants
+
+company_branding:
+  # Basic company information
+  company_name: "Your Company"
+  company_tagline: ""
+  company_description: ""
+  company_website: ""
+  company_logo_url: ""
+  company_favicon_url: ""
+  
+  # Contact information
+  support_email: ""
+  sales_email: ""
+  contact_phone: ""
+  company_address: ""
+  
+  # Legal information
+  privacy_policy_url: ""
+  terms_of_service_url: ""
+  cookie_policy_url: ""
+  gdpr_contact_email: ""
+
+ui_customization:
+  # Color scheme
+  primary_color: "#667eea"
+  secondary_color: "#764ba2"
+  accent_color: "#4CAF50"
+  background_color: "#ffffff"
+  text_color: "#333333"
+  
+  # Typography
+  primary_font: "Inter, system-ui, sans-serif"
+  heading_font: "Inter, system-ui, sans-serif"
+  font_size_base: "16px"
+  
+  # Layout preferences
+  sidebar_position: "left"  # left, right, top
+  theme_mode: "light"       # light, dark, auto
+  compact_mode: false
+
+email_branding:
+  # Email template customization
+  email_header_color: "#667eea"
+  email_footer_color: "#f8f9fa"
+  email_text_color: "#333333"
+  email_link_color: "#667eea"
+  
+  # Email signatures
+  include_company_logo: true
+  include_social_links: false
+  include_unsubscribe_footer: true
+  include_physical_address: true
+  
+  # Social media links
+  social_links:
+    facebook: ""
+    twitter: ""
+    linkedin: ""
+    instagram: ""
+    youtube: ""
+
+domain_settings:
+  # Custom domains
+  primary_domain: ""
+  tracking_domain: ""
+  sending_domain: ""
+  
+  # SSL/TLS settings
+  force_ssl: true
+  ssl_certificate_auto_renew: true
+  
+  # DNS settings
+  enable_spf: false
+  enable_dkim: false
+  enable_dmarc: false
+
+white_labeling:
+  # White label customization (enterprise feature)
+  enabled: false
+  hide_powered_by: false
+  custom_login_page: false
+  custom_404_page: false
+  custom_error_pages: false
+  
+  # API white labeling
+  custom_api_domain: ""
+  api_documentation_branding: false
+
+localization:
+  # Language and region settings
+  default_language: "en"
+  default_timezone: "UTC"
+  default_currency: "USD"
+  date_format: "MM/DD/YYYY"
+  time_format: "12h"  # 12h or 24h
+  
+  # Available languages
+  supported_languages:
+    - "en"
+    - "es"
+    - "fr"
+    - "de"
+  
+  # Regional settings
+  number_format: "US"  # US, EU, etc.
+  decimal_separator: "."
+  thousands_separator: ","
+
+dashboard_customization:
+  # Dashboard layout
+  show_welcome_widget: true
+  show_quick_stats: true
+  show_recent_campaigns: true
+  show_performance_charts: true
+  
+  # Widget preferences
+  default_chart_type: "line"  # line, bar, pie
+  default_date_range: "30d"   # 7d, 30d, 90d, 1y
+  auto_refresh_interval: 300  # seconds, 0 = disabled
+  
+  # Data visualization
+  currency_display: "symbol"  # symbol, code, name
+  percentage_precision: 1
+  number_abbreviation: true   # 1K, 1M instead of 1000, 1000000
+
+notification_branding:
+  # Email notification customization
+  notification_from_name: "{{company_name}}"
+  notification_from_email: "notifications@{{domain}}"
+  notification_reply_to: "support@{{domain}}"
+  
+  # Notification templates
+  email_template_style: "professional"  # professional, modern, minimal
+  include_company_branding: true
+  include_action_buttons: true
+  
+  # Push notification settings
+  push_notification_icon: ""
+  push_notification_badge: ""
+
+integration_settings:
+  # Third-party integration branding
+  zapier_app_name: "{{company_name}} Email"
+  webhook_user_agent: "{{company_name}}-Webhook/1.0"
+  api_rate_limit_headers: true
+  
+  # OAuth application settings
+  oauth_app_name: "{{company_name}} Email Platform"
+  oauth_app_description: "Email marketing and automation platform"
+  oauth_app_logo: ""
+  oauth_privacy_policy: ""
+  oauth_terms_of_service: ""
+
+compliance_branding:
+  # Compliance-related branding
+  gdpr_company_name: "{{company_name}}"
+  gdpr_controller_contact: "{{support_email}}"
+  gdpr_dpo_contact: ""
+  
+  # Cookie consent
+  cookie_consent_style: "banner"  # banner, modal, corner
+  cookie_consent_position: "bottom"  # bottom, top
+  cookie_consent_theme: "light"  # light, dark
+
+# Feature-specific branding
+feature_branding:
+  # Campaign builder
+  campaign_builder_theme: "light"
+  drag_drop_style: "modern"
+  preview_device: "desktop"  # desktop, mobile, both
+  
+  # Template editor
+  template_editor_theme: "light"
+  code_editor_theme: "vs-light"
+  wysiwyg_toolbar: "full"  # full, basic, minimal
+  
+  # Analytics dashboard
+  analytics_color_scheme: "blue"  # blue, green, purple, orange
+  chart_animation: true
+  data_table_style: "striped"  # striped, bordered, minimal
+
+# Onboarding customization
+onboarding:
+  # Welcome experience
+  show_onboarding_wizard: true
+  onboarding_steps: 5
+  skip_onboarding_allowed: true
+  
+  # Setup guidance
+  show_setup_checklist: true
+  show_feature_tutorials: true
+  show_video_guides: false
+  
+  # Sample data
+  create_sample_campaign: false
+  create_sample_contacts: false
+  create_sample_templates: true

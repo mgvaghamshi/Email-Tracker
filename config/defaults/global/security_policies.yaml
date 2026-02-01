@@ -1,0 +1,161 @@
+# Global Security Policies Configuration
+# System-wide security defaults and policies
+
+authentication:
+  jwt:
+    algorithm: "HS256"
+    access_token_expire_minutes: 30
+    refresh_token_expire_days: 7
+    issuer: "emailtracker-api"
+    audience: "emailtracker-users"
+  
+  session_management:
+    default_timeout_hours: 24
+    max_concurrent_sessions: 5
+    extend_on_activity: true
+    cleanup_expired_sessions: true
+    cleanup_interval_hours: 6
+  
+  api_keys:
+    default_expiry_days: 365
+    max_keys_per_user: 10
+    enable_auto_rotation: false
+    auto_rotation_days: 90
+    include_ip_restrictions: false
+
+password_policy:
+  min_length: 8
+  max_length: 128
+  require_uppercase: true
+  require_lowercase: true
+  require_numbers: true
+  require_symbols: false
+  min_symbols: 0
+  prevent_reuse_count: 5
+  max_age_days: 90
+  require_change_on_first_login: false
+  complexity_score_min: 3  # out of 5
+
+two_factor_authentication:
+  enabled_by_default: false
+  enforce_for_admins: true
+  enforce_for_high_privilege: true
+  backup_codes_count: 10
+  allowed_methods:
+    - "totp"
+    - "sms"
+    - "email"
+    - "backup_codes"
+  grace_period_days: 7  # for setup after enforcement
+
+account_security:
+  max_login_attempts: 5
+  lockout_duration_minutes: 30
+  progressive_lockout: true
+  lockout_durations: [5, 15, 30, 60, 120]  # minutes
+  enable_captcha_after_attempts: 3
+  require_email_verification: true
+  enable_login_notifications: true
+  enable_suspicious_activity_alerts: true
+
+data_protection:
+  encrypt_pii: true
+  encryption_algorithm: "AES-256-GCM"
+  hash_passwords_with: "bcrypt"
+  bcrypt_rounds: 12
+  anonymize_logs: true
+  gdpr_compliance: true
+  data_retention_days: 2555  # 7 years
+  auto_delete_inactive_accounts: false
+  inactive_account_threshold_days: 730  # 2 years
+
+audit_logging:
+  enabled: true
+  log_all_api_calls: false
+  log_authentication_events: true
+  log_authorization_failures: true
+  log_data_access: true
+  log_admin_actions: true
+  log_security_events: true
+  retention_days: 2555  # 7 years
+  real_time_alerts: true
+
+rate_limiting:
+  api_requests:
+    default_per_minute: 60
+    default_per_hour: 3600
+    default_per_day: 50000
+    burst_allowance: 10
+  
+  authentication:
+    login_attempts_per_minute: 5
+    password_reset_per_hour: 3
+    email_verification_per_hour: 5
+  
+  email_sending:
+    default_per_minute: 10
+    default_per_hour: 100
+    default_per_day: 1000
+
+ip_security:
+  enable_geoblocking: false
+  blocked_countries: []
+  enable_vpn_detection: false
+  block_tor_exits: false
+  whitelist_enabled: false
+  blacklist_enabled: true
+  auto_block_brute_force: true
+
+compliance:
+  gdpr:
+    enabled: true
+    consent_required: true
+    data_portability: true
+    right_to_be_forgotten: true
+    cookie_consent: true
+  
+  ccpa:
+    enabled: true
+    opt_out_enabled: true
+    do_not_sell: true
+  
+  hipaa:
+    enabled: false
+    require_baa: false
+    audit_all_access: false
+  
+  soc2:
+    enabled: false
+    continuous_monitoring: false
+    quarterly_reviews: false
+
+incident_response:
+  auto_response_enabled: true
+  escalation_rules:
+    - trigger: "brute_force_detected"
+      action: "auto_block_ip"
+      duration_minutes: 60
+    
+    - trigger: "admin_account_compromised"
+      action: "disable_account"
+      notify: ["security_team", "admin"]
+    
+    - trigger: "data_breach_suspected"
+      action: "alert_all_admins"
+      escalate_after_minutes: 15
+
+security_headers:
+  content_security_policy: "default-src 'self'"
+  x_frame_options: "DENY"
+  x_content_type_options: "nosniff"
+  x_xss_protection: "1; mode=block"
+  strict_transport_security: "max-age=31536000; includeSubDomains"
+  referrer_policy: "strict-origin-when-cross-origin"
+
+vulnerability_management:
+  automated_scanning: true
+  scan_frequency_days: 7
+  dependency_checking: true
+  security_advisories: true
+  patch_management: true
+  penetration_testing_frequency_months: 6

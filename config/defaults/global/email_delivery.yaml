@@ -1,0 +1,226 @@
+# Global Email Delivery Configuration
+# Default SMTP and email delivery settings
+
+smtp_defaults:
+  # Default SMTP configuration
+  server: "smtp.gmail.com"
+  port: 587
+  security: "TLS"  # TLS, SSL, or NONE
+  timeout_seconds: 30
+  use_ssl_verification: true
+  
+  # Connection pooling
+  max_connections: 10
+  connection_timeout: 30
+  idle_timeout: 300
+  
+  # Retry logic
+  max_retries: 3
+  retry_delay_seconds: 5
+  exponential_backoff: true
+
+email_defaults:
+  # Sender information
+  default_from_email: "noreply@example.com"
+  default_from_name: "EmailTracker"
+  default_reply_to: null
+  
+  # Email formatting
+  default_charset: "utf-8"
+  default_encoding: "quoted-printable"
+  include_message_id: true
+  include_date_header: true
+  
+  # Content defaults
+  auto_generate_text_version: true
+  include_unsubscribe_header: true
+  include_list_unsubscribe_header: true
+
+delivery_settings:
+  # Rate limiting for sending
+  default_rate_limit:
+    emails_per_minute: 10
+    emails_per_hour: 100
+    emails_per_day: 1000
+    burst_allowance: 5
+  
+  # Delivery optimization
+  batch_size: 50
+  parallel_processing: true
+  max_concurrent_sends: 5
+  send_timeout_seconds: 60
+  
+  # Queue management
+  max_queue_size: 10000
+  queue_processing_interval: 30  # seconds
+  failed_email_retention_days: 30
+
+tracking_settings:
+  # Email tracking
+  enable_open_tracking: true
+  enable_click_tracking: true
+  enable_delivery_tracking: true
+  enable_bounce_tracking: true
+  enable_unsubscribe_tracking: true
+  
+  # Tracking configuration
+  tracking_pixel_cache_hours: 24
+  click_tracking_domain: null  # use default domain
+  open_tracking_domain: null   # use default domain
+  
+  # Bot detection
+  enable_bot_detection: true
+  bot_user_agents:
+    - "GoogleBot"
+    - "BingBot"
+    - "YahooBot"
+    - "facebookexternalhit"
+    - "Twitterbot"
+    - "LinkedInBot"
+
+bounce_handling:
+  # Bounce processing
+  enable_bounce_processing: true
+  auto_remove_hard_bounces: true
+  hard_bounce_threshold: 1
+  soft_bounce_threshold: 5
+  
+  # Bounce classification
+  hard_bounce_patterns:
+    - "550 5.1.1"  # User unknown
+    - "550 5.1.2"  # Host unknown
+    - "550 5.2.1"  # Mailbox disabled
+    - "550 5.7.1"  # Delivery not authorized
+  
+  soft_bounce_patterns:
+    - "450"        # Temporary failure
+    - "451"        # Local error in processing
+    - "452"        # Insufficient system storage
+
+spam_prevention:
+  # Anti-spam measures
+  enable_dkim_signing: false
+  enable_spf_checking: false
+  enable_dmarc_policy: false
+  
+  # Content filtering
+  check_spam_score: true
+  max_spam_score: 5.0
+  block_suspicious_content: true
+  
+  # Reputation management
+  monitor_sender_reputation: true
+  auto_warm_up_ips: false
+  reputation_threshold: 85
+
+external_services:
+  # SendGrid configuration
+  sendgrid:
+    enabled: false
+    api_key: null
+    default_template_id: null
+    enable_click_tracking: true
+    enable_open_tracking: true
+  
+  # Mailgun configuration
+  mailgun:
+    enabled: false
+    api_key: null
+    domain: null
+    region: "us"  # us or eu
+    enable_tracking: true
+  
+  # AWS SES configuration
+  aws_ses:
+    enabled: false
+    region: "us-east-1"
+    access_key_id: null
+    secret_access_key: null
+    configuration_set: null
+
+webhooks:
+  # Webhook configuration for delivery events
+  enable_webhooks: true
+  webhook_events:
+    - "delivered"
+    - "opened"
+    - "clicked"
+    - "bounced"
+    - "complained"
+    - "unsubscribed"
+  
+  webhook_retry:
+    max_retries: 3
+    retry_delay_seconds: 30
+    timeout_seconds: 10
+
+analytics:
+  # Email analytics settings
+  enable_analytics: true
+  real_time_tracking: true
+  aggregate_statistics: true
+  
+  # Data retention
+  raw_events_retention_days: 90
+  aggregated_data_retention_days: 365
+  
+  # Reporting
+  enable_automated_reports: false
+  weekly_reports: false
+  monthly_reports: false
+
+compliance:
+  # CAN-SPAM compliance
+  can_spam_compliance: true
+  require_physical_address: true
+  require_unsubscribe_link: true
+  honor_unsubscribe_requests: true
+  
+  # GDPR compliance
+  gdpr_compliance: true
+  require_explicit_consent: true
+  data_processing_lawful_basis: "consent"
+  
+  # Other regulations
+  casl_compliance: false  # Canada
+  lcr_compliance: false   # Australia
+
+performance:
+  # Performance optimization
+  enable_connection_pooling: true
+  enable_persistent_connections: true
+  enable_compression: false
+  
+  # Monitoring
+  track_delivery_times: true
+  track_server_response_times: true
+  alert_on_slow_delivery: true
+  slow_delivery_threshold_seconds: 30
+
+notification_settings:
+  # Admin notifications
+  notify_on_high_bounce_rate: true
+  high_bounce_rate_threshold: 5.0  # percentage
+  
+  notify_on_delivery_failures: true
+  delivery_failure_threshold: 10   # consecutive failures
+  
+  notify_on_quota_exceeded: true
+  quota_warning_threshold: 80      # percentage
+
+# Email template defaults for system emails
+system_email_templates:
+  welcome_email:
+    subject: "Welcome to {{company_name}}!"
+    from_name: "{{company_name}} Team"
+    priority: "normal"
+  
+  password_reset:
+    subject: "Reset your password"
+    from_name: "{{company_name}} Security"
+    priority: "high"
+  
+  email_verification:
+    subject: "Verify your email address"
+    from_name: "{{company_name}}"
+    priority: "high"

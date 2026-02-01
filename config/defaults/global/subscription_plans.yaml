@@ -1,0 +1,177 @@
+# Global Subscription Plans Configuration
+# These are the default subscription plans available system-wide
+
+subscription_plans:
+  free:
+    name: "free"
+    display_name: "Free"
+    description: "Perfect for getting started with email marketing"
+    price: 0.0
+    billing_interval: "monthly"
+    limits:
+      max_campaigns: 5
+      max_recipients_per_campaign: 100
+      max_monthly_emails: 1000
+      max_templates: 3
+      max_contacts: 500
+      max_api_keys: 1
+      max_webhooks: 0
+    features:
+      - "campaign_create"
+      - "campaign_edit"
+      - "campaign_send"
+      - "basic_analytics"
+      - "contact_management"
+      - "basic_templates"
+    restrictions:
+      - "no_priority_support"
+      - "basic_analytics_only"
+      - "no_automation"
+    sort_order: 1
+    is_popular: false
+    trial_days: 0
+
+  pro:
+    name: "pro"
+    display_name: "Pro"
+    description: "Advanced features for growing businesses"
+    price: 29.0
+    billing_interval: "monthly"
+    limits:
+      max_campaigns: null  # unlimited
+      max_recipients_per_campaign: 10000
+      max_monthly_emails: 50000
+      max_templates: 50
+      max_contacts: 10000
+      max_api_keys: 5
+      max_webhooks: 10
+    features:
+      - "campaign_create"
+      - "campaign_edit"
+      - "campaign_send"
+      - "basic_analytics"
+      - "contact_management"
+      - "basic_templates"
+      - "campaign_scheduling"
+      - "ab_testing"
+      - "advanced_analytics"
+      - "segmentation"
+      - "pro_templates"
+      - "email_automation"
+      - "api_access"
+      - "priority_support"
+      - "webhook_support"
+      - "recurring_campaigns"
+    restrictions: []
+    sort_order: 2
+    is_popular: true
+    trial_days: 14
+
+  enterprise:
+    name: "enterprise"
+    display_name: "Enterprise"
+    description: "Full-featured solution for large organizations"
+    price: 99.0
+    billing_interval: "monthly"
+    limits:
+      max_campaigns: null  # unlimited
+      max_recipients_per_campaign: null  # unlimited
+      max_monthly_emails: null  # unlimited
+      max_templates: null  # unlimited
+      max_contacts: null  # unlimited
+      max_api_keys: 50
+      max_webhooks: 100
+    features:
+      - "campaign_create"
+      - "campaign_edit"
+      - "campaign_send"
+      - "basic_analytics"
+      - "contact_management"
+      - "basic_templates"
+      - "campaign_scheduling"
+      - "ab_testing"
+      - "advanced_analytics"
+      - "segmentation"
+      - "pro_templates"
+      - "email_automation"
+      - "api_access"
+      - "priority_support"
+      - "webhook_support"
+      - "recurring_campaigns"
+      - "advanced_segmentation"
+      - "ai_content_generation"
+      - "ai_optimization"
+      - "team_collaboration"
+      - "campaign_approval"
+      - "white_labeling"
+      - "sso_integration"
+      - "advanced_integrations"
+      - "dedicated_support"
+      - "custom_limits"
+      - "compliance_features"
+      - "advanced_security"
+    restrictions: []
+    sort_order: 3
+    is_popular: false
+    trial_days: 30
+
+# Plan upgrade paths and recommendations
+plan_upgrade_matrix:
+  free:
+    recommended_upgrade: "pro"
+    upgrade_triggers:
+      - campaigns_limit_reached
+      - recipients_limit_reached
+      - monthly_emails_limit_reached
+    upgrade_benefits:
+      - "Unlimited campaigns"
+      - "10x more recipients per campaign"
+      - "50x more monthly emails"
+      - "Advanced analytics"
+      - "Email automation"
+
+  pro:
+    recommended_upgrade: "enterprise"
+    upgrade_triggers:
+      - team_size_growth
+      - compliance_requirements
+      - advanced_features_needed
+    upgrade_benefits:
+      - "Unlimited everything"
+      - "Team collaboration"
+      - "Advanced security"
+      - "Dedicated support"
+      - "White labeling"
+
+# Default plan assignment rules
+default_assignment:
+  new_user: "free"
+  trial_expired: "free"
+  payment_failed: "free"
+  enterprise_trial: "enterprise"
+
+# Billing and payment configuration
+billing_settings:
+  currencies:
+    - "USD"
+    - "EUR"
+    - "GBP"
+  payment_methods:
+    - "credit_card"
+    - "paypal"
+    - "bank_transfer"  # enterprise only
+  invoicing:
+    auto_invoice: true
+    invoice_terms: 30  # days
+    late_fee_percentage: 5.0
+    grace_period_days: 7
+
+# Feature flags for subscription system
+feature_flags:
+  enable_trials: true
+  enable_downgrades: true
+  enable_annual_discounts: true
+  annual_discount_percentage: 20.0
+  enable_usage_based_billing: false
+  enable_seat_based_billing: false
+  enable_custom_plans: true  # enterprise feature
