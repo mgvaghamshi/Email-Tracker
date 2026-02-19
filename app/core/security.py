@@ -9,7 +9,7 @@ import secrets
 import uuid
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated=[])
 
 # JWT Configuration (should come from settings)
 SECRET_KEY = "your-secret-key-change-in-production"  # TODO: Move to environment

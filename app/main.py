@@ -112,7 +112,11 @@ Need help? Contact our support team:
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly in production
+    allow_origins=[
+        "https://mail-tantra.marvonix.com",
+        "http://localhost:3000",
+        "https://emailtrackerapi.marvonix.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
