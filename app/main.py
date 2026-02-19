@@ -109,17 +109,19 @@ Need help? Contact our support team:
     lifespan=lifespan
 )
 
-# CORS middleware
+# CORS middleware - Explicitly configured for production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://mail-tantra.marvonix.com",
+        "https://mail-tantra.marvonix.com/", 
         "http://localhost:3000",
         "https://emailtrackerapi.marvonix.com"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Include all API routers
