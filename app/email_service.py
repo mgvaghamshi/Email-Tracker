@@ -14,7 +14,7 @@ import base64
 import certifi
 
 from .models import EmailTracker
-from .schemas import EmailSendRequest
+from .email_schemas import EmailSendRequest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -269,7 +269,7 @@ class EmailService:
             # Update tracker status in database
             if success:
                 try:
-                    from .database import SessionLocal
+                    from .db import SessionLocal
                     db = SessionLocal()
                     try:
                         tracker = db.query(EmailTracker).filter(EmailTracker.id == tracker_id).first()

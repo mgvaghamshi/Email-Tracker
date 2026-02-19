@@ -10,7 +10,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
-from .models import Base
+from ..models import Base
 from typing import List, Optional
 import pyotp
 import qrcode

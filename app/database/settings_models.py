@@ -9,7 +9,7 @@ import uuid
 import json
 from typing import Dict, Any, Optional
 
-from .models import Base
+from ..models import Base
 
 
 class UserSettings(Base):
@@ -32,7 +32,8 @@ class UserSettings(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
-    user = relationship("User", back_populates="settings")
+    # Relationship to user (commented out to avoid circular import)
+    # user = relationship("User", back_populates="settings")
     
     __table_args__ = (
         Index('idx_user_settings_user_id', 'user_id'),

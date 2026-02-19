@@ -11,7 +11,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
-from .models import Base
+from ..models import Base
 
 
 class SubscriptionPlan(Base):

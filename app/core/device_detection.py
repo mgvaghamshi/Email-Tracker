@@ -177,3 +177,30 @@ def is_known_location(ip_address: str, user_previous_ips: list) -> bool:
     # Could add more sophisticated location-based checking here
     # For now, just exact IP match
     return False
+
+
+def get_device_info(request) -> Dict[str, Any]:
+    """
+    Extract device information from FastAPI request
+    
+    Args:
+        request: FastAPI Request object
+        
+    Returns:
+        Dictionary with device information
+    """
+    user_agent = request.headers.get("user-agent", "")
+    ip_address = request.client.host if request.client else None
+    
+    device_data = parse_device_info(user_agent)
+    
+    return {
+        "user_agent": user_agent,
+        "ip_address": ip_address,
+        "device_name": f"{device_data['device_brand']} {device_data['device_model']}",
+        "device_type": device_data["device_type"],
+        "browser": f"{device_data['browser_name']} {device_data['browser_version']}",
+        "os": f"{device_data['os_name']} {device_data['os_version']}",
+        "is_mobile": device_data["is_mobile"],
+        "is_bot": device_data["is_bot"]
+    }

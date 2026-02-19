@@ -9,7 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timedelta
-from .models import Base
+from ..models import Base
 from typing import List, Optional, Dict, Any
 
 
@@ -30,8 +30,8 @@ class SecurityAuditLog(Base):
     security_metadata = Column(JSON)  # Changed from 'metadata' to avoid conflict
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationship to user
-    user = relationship("User", back_populates="security_audit_logs")
+    # Relationship to user (commented out to avoid circular import)
+    # user = relationship("User", back_populates="security_audit_logs")
     
     # Indexes for better performance
     __table_args__ = (
@@ -57,7 +57,8 @@ class PasswordResetToken(Base):
     is_active = Column(Boolean, default=True)
     
     # Relationship to user
-    user = relationship("User", back_populates="password_reset_tokens")
+    # Relationship to user (commented out to avoid circular import)
+    # user = relationship("User", back_populates="password_reset_tokens")
     
     # Indexes for better performance
     __table_args__ = (
@@ -114,7 +115,8 @@ class SecuritySettings(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationship to user
-    user = relationship("User", back_populates="security_settings")
+    # Relationship to user (commented out to avoid circular import)
+    # user = relationship("User", back_populates="security_settings")
     
     # Indexes for better performance
     __table_args__ = (

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 from enum import Enum
 
-from .models import Base
+from ..models import Base
 
 
 class RecurringFrequency(str, Enum):
@@ -55,7 +55,7 @@ class RecurringCampaign(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    template_id = Column(String, ForeignKey("templates.id"), nullable=True)
+    template_id = Column(String, ForeignKey("email_templates.id"), nullable=True)
     
     # Campaign Details
     name = Column(String, nullable=False)
@@ -272,7 +272,7 @@ class RecurringCampaignOccurrence(Base):
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     recurring_campaign_id = Column(String, ForeignKey("recurring_campaigns.id"), nullable=False)
-    campaign_id = Column(String, ForeignKey("campaigns.id"), nullable=True)  # Created campaign for this occurrence
+    campaign_id = Column(String, ForeignKey("email_campaigns.id"), nullable=True)  # Created campaign for this occurrence
     
     # Occurrence Details
     sequence_number = Column(Integer, nullable=False)  # 1st, 2nd, 3rd occurrence

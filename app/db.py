@@ -35,6 +35,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     """Initialize the database by creating all tables"""
     try:
+        # Import all models to ensure they are registered with Base
+        from .database import user_models, security_models, settings_models, subscription_models, recurring_models
+        
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
     except SQLAlchemyError as e:
