@@ -22,3 +22,7 @@ requests
 PyYAML
 python-dateutil
 pytz
+bcrypt
+pyotp
+qrcode
+user-agents
