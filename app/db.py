@@ -26,6 +26,10 @@ if DATABASE_URL.startswith("sqlite"):
     )
 else:
     # For PostgreSQL or other databases
+    # Fix for Supabase/PostgreSQL connection strings starting with postgres://
+    if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    
     engine = create_engine(DATABASE_URL, echo=False)
 
 # Create session factory
